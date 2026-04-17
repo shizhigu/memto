@@ -11,7 +11,6 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": false,
-    "types": ["bun-types"],
     "baseUrl": ".",
     "paths": {
       "@memto/session-core": ["./packages/session-core/src/index.ts"],

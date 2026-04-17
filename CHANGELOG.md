@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-04-17
+
+### Fixed
+
+- CI typecheck: drop deprecated `bun-types` reference from `tsconfig.json` (`@types/bun` is now auto-picked up).
+
+### Changed
+
+- Publish workflow switched to npm OIDC Trusted Publisher — no NPM_TOKEN secret needed, no rotation.
+
 ## [0.1.0] — 2026-04-17
 
 ### Added

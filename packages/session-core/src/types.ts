@@ -7,7 +7,13 @@
  * analytics) don't have to care which agent produced a session.
  */
 
+import type { SamplingConfig as _SamplingConfig } from './derive.ts';
+
 export type Runtime = 'claude-code' | 'codex' | 'hermes' | 'openclaw';
+
+export type { SamplingConfig, SamplingStrategy } from './derive.ts';
+
+type SamplingConfig = _SamplingConfig;
 
 export interface NormalizedSession {
   /** Which agent runtime produced this session. */
@@ -36,8 +42,22 @@ export interface NormalizedSession {
   first_user_prompt?: string;
   /** Most recent user prompt. */
   last_user_prompt?: string;
+  /**
+   * 3–5 additional user prompts sampled evenly across the session. Gives a
+   * sense of how the conversation evolved beyond just the first and last
+   * turns — important for long sessions where the topic drifted. Previews
+   * are short (~200 chars each). Empty array for short sessions.
+   */
+  sampled_user_prompts?: string[];
+  /**
+   * Preview of the last substantive assistant reply. Useful to see "where
+   * the conversation was" when you're about to wake it up with a question.
+   */
+  last_assistant_preview?: string;
   /** Total message count (including assistant/tool/system). */
   message_count?: number;
+  /** Size on disk in bytes, if the adapter can cheaply determine it. */
+  size_bytes?: number;
   /** Parent session id, if the runtime tracks hierarchy (Hermes). */
   parent_session_id?: string;
   /** Absolute path to the raw storage artifact (jsonl file) or runtime-specific locator. */
@@ -59,6 +79,18 @@ export interface NormalizedMessage {
   tool_name?: string;
 }
 
+export interface ListOptions {
+  /** Max sessions to return. */
+  limit?: number;
+  /** Only include sessions whose last activity is newer than this. */
+  since?: Date;
+  /**
+   * Prompt sampling config for `sampled_user_prompts`.
+   * Default: `{ strategy: 'evenly-spaced', count: 5 }`.
+   */
+  sampling?: SamplingConfig;
+}
+
 /**
  * Every adapter implements this tiny interface. `list()` should be cheap
  * (seconds for all sessions) and `messages()` can be expensive for large
@@ -76,9 +108,9 @@ export interface SessionAdapter {
    * Enumerate all sessions stored locally. Ordered newest first.
    * `limit` is a soft cap; adapters may over-return if it's cheap.
    */
-  list(options?: { limit?: number; since?: Date }): Promise<NormalizedSession[]>;
+  list(options?: ListOptions): Promise<NormalizedSession[]>;
   /** Get one session by id. Returns `null` if not found. */
-  get(id: string): Promise<NormalizedSession | null>;
+  get(id: string, options?: { sampling?: SamplingConfig }): Promise<NormalizedSession | null>;
   /** Stream messages for a session. */
   messages(id: string): Promise<NormalizedMessage[]>;
 }

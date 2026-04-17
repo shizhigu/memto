@@ -15,8 +15,14 @@ import { Database } from 'bun:sqlite';
 import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { clean, deriveTitle, previewPrompt } from '../derive.ts';
-import type { NormalizedMessage, NormalizedSession, SessionAdapter } from '../types.ts';
+import { clean, deriveTitle, previewPrompt, sampleItems } from '../derive.ts';
+import type {
+  ListOptions,
+  NormalizedMessage,
+  NormalizedSession,
+  SamplingConfig,
+  SessionAdapter,
+} from '../types.ts';
 
 function defaultDbPath(): string {
   return join(homedir(), '.hermes', 'state.db');
@@ -78,12 +84,13 @@ export class HermesAdapter implements SessionAdapter {
     }
   }
 
-  async list(options?: { limit?: number; since?: Date }): Promise<NormalizedSession[]> {
+  async list(options?: ListOptions): Promise<NormalizedSession[]> {
     if (!(await this.isAvailable())) return [];
     const db = openDb(this.dbPath);
     try {
       const limit = options?.limit ?? 1000;
       const sinceEpoch = options?.since ? options.since.getTime() / 1000 : 0;
+      const sampling = options?.sampling;
 
       const rows = db
         .query<SessionRow, [number, number]>(
@@ -95,43 +102,65 @@ export class HermesAdapter implements SessionAdapter {
         )
         .all(sinceEpoch, limit);
 
-      // Batch-fetch first user prompt per session (single query instead of N).
-      // Fallback-friendly: if schema differs we just skip.
-      const prompts = new Map<string, string>();
-      try {
-        for (const s of rows) {
-          const m = db
-            .query<{ content: string | null }, [string]>(
-              `SELECT content FROM messages
-                WHERE session_id = ? AND role = 'user'
-             ORDER BY timestamp ASC LIMIT 1`,
-            )
-            .get(s.id);
-          if (m?.content) prompts.set(s.id, m.content);
-        }
-      } catch {
-        /* shape mismatch — skip prompt extraction */
-      }
+      // Pull all user prompts + last assistant reply per session in one
+      // prepared statement. Slightly more work than "just the first", but
+      // it keeps the list view meaningful for long sessions that drifted.
+      const userStmt = db.query<{ content: string | null }, [string]>(
+        `SELECT content FROM messages
+          WHERE session_id = ? AND role = 'user' AND content IS NOT NULL
+       ORDER BY timestamp ASC`,
+      );
+      const lastAssistantStmt = db.query<{ content: string | null }, [string]>(
+        `SELECT content FROM messages
+          WHERE session_id = ? AND role = 'assistant' AND content IS NOT NULL
+       ORDER BY timestamp DESC LIMIT 1`,
+      );
 
-      return rows.map((r) => ({
-        runtime: this.runtime,
-        id: r.id,
-        started_at: epochToIso(r.started_at) ?? new Date(0).toISOString(),
-        last_active_at: epochToIso(r.ended_at) ?? epochToIso(r.started_at),
-        title: deriveTitle({ explicit: r.title, firstUserPrompt: prompts.get(r.id) }),
-        model: r.model ?? undefined,
-        first_user_prompt: previewPrompt(prompts.get(r.id)),
-        message_count: r.message_count ?? undefined,
-        parent_session_id: r.parent_session_id ?? undefined,
-        raw_path: `${this.dbPath}#${r.id}`,
-      }));
+      return rows.map((r) => {
+        let userPrompts: string[] = [];
+        let firstPrompt: string | undefined;
+        let lastPrompt: string | undefined;
+        let lastAssistant: string | undefined;
+        try {
+          const all = userStmt.all(r.id);
+          userPrompts = all
+            .map((m) => clean(m.content))
+            .filter((t) => t.length > 0)
+            .map((t) => previewPrompt(t));
+          firstPrompt = userPrompts[0];
+          lastPrompt = userPrompts[userPrompts.length - 1];
+          const la = lastAssistantStmt.get(r.id);
+          if (la?.content) lastAssistant = previewPrompt(la.content);
+        } catch {
+          /* schema drift — skip silently */
+        }
+        return {
+          runtime: this.runtime,
+          id: r.id,
+          started_at: epochToIso(r.started_at) ?? new Date(0).toISOString(),
+          last_active_at: epochToIso(r.ended_at) ?? epochToIso(r.started_at),
+          title: deriveTitle({ explicit: r.title, firstUserPrompt: firstPrompt }),
+          model: r.model ?? undefined,
+          first_user_prompt: firstPrompt,
+          last_user_prompt: lastPrompt,
+          sampled_user_prompts: sampleItems(userPrompts, sampling),
+          last_assistant_preview: lastAssistant,
+          message_count: r.message_count ?? undefined,
+          parent_session_id: r.parent_session_id ?? undefined,
+          raw_path: `${this.dbPath}#${r.id}`,
+        };
+      });
     } finally {
       db.close();
     }
   }
 
-  async get(id: string): Promise<NormalizedSession | null> {
+  async get(
+    id: string,
+    options?: { sampling?: SamplingConfig },
+  ): Promise<NormalizedSession | null> {
     if (!(await this.isAvailable())) return null;
+    const sampling = options?.sampling;
     const db = openDb(this.dbPath);
     try {
       const r = db
@@ -142,15 +171,18 @@ export class HermesAdapter implements SessionAdapter {
         .get(id);
       if (!r) return null;
 
-      const first = db
+      const userPrompts = db
         .query<{ content: string | null }, [string]>(
-          `SELECT content FROM messages WHERE session_id = ? AND role = 'user'
-        ORDER BY timestamp ASC LIMIT 1`,
+          `SELECT content FROM messages WHERE session_id = ? AND role = 'user' AND content IS NOT NULL
+        ORDER BY timestamp ASC`,
         )
-        .get(id);
-      const last = db
+        .all(id)
+        .map((m) => clean(m.content))
+        .filter((t) => t.length > 0)
+        .map((t) => previewPrompt(t));
+      const lastAssistant = db
         .query<{ content: string | null }, [string]>(
-          `SELECT content FROM messages WHERE session_id = ? AND role = 'user'
+          `SELECT content FROM messages WHERE session_id = ? AND role = 'assistant' AND content IS NOT NULL
         ORDER BY timestamp DESC LIMIT 1`,
         )
         .get(id);
@@ -162,11 +194,15 @@ export class HermesAdapter implements SessionAdapter {
         last_active_at: epochToIso(r.ended_at) ?? epochToIso(r.started_at),
         title: deriveTitle({
           explicit: r.title,
-          firstUserPrompt: first?.content ?? undefined,
+          firstUserPrompt: userPrompts[0],
         }),
         model: r.model ?? undefined,
-        first_user_prompt: previewPrompt(first?.content ?? undefined),
-        last_user_prompt: previewPrompt(last?.content ?? undefined),
+        first_user_prompt: userPrompts[0],
+        last_user_prompt: userPrompts[userPrompts.length - 1],
+        sampled_user_prompts: sampleItems(userPrompts, sampling),
+        last_assistant_preview: lastAssistant?.content
+          ? previewPrompt(lastAssistant.content)
+          : undefined,
         message_count: r.message_count ?? undefined,
         parent_session_id: r.parent_session_id ?? undefined,
         raw_path: `${this.dbPath}#${r.id}`,

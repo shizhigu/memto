@@ -16,7 +16,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { copyFile, readFile, unlink, writeFile } from 'node:fs/promises';
+import { readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { Database } from 'bun:sqlite';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -25,7 +25,11 @@ import type { NormalizedSession, Runtime } from './types.ts';
 export interface AskOptions {
   /** Ask a question without a fork. The original session will be mutated. */
   inPlace?: boolean;
-  /** Override timeout in ms. Defaults to 120_000. */
+  /**
+   * Override timeout in ms. Defaults to a size-based auto-scale:
+   * 120s floor, + 1s per MB of session transcript. Large Claude Code
+   * sessions (50+ MB) can genuinely take several minutes to reload.
+   */
   timeoutMs?: number;
 }
 
@@ -40,9 +44,20 @@ export interface AskResult {
   raw_stderr: string;
   /** True if we forked and have already cleaned up the artifact. */
   cleaned_up: boolean;
+  /** True if the subprocess exceeded the timeout. Answer is empty when true. */
+  timed_out: boolean;
+  /** Subprocess exit code, or null if killed. */
+  exit_code: number | null;
 }
 
-const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_TIMEOUT_FLOOR_MS = 120_000;
+const DEFAULT_TIMEOUT_PER_MB_MS = 1_000;
+
+function autoTimeout(session: NormalizedSession, override: number | undefined): number {
+  if (override !== undefined) return override;
+  const mb = (session.size_bytes ?? 0) / (1024 * 1024);
+  return Math.max(DEFAULT_TIMEOUT_FLOOR_MS, Math.round(DEFAULT_TIMEOUT_FLOOR_MS + mb * DEFAULT_TIMEOUT_PER_MB_MS));
+}
 
 /**
  * Run a subprocess with a timeout and capture stdout/stderr. Resolves with
@@ -90,21 +105,67 @@ async function askClaude(
   question: string,
   opts: AskOptions,
 ): Promise<AskResult> {
+  // Snapshot the set of jsonl files in the project dir before we spawn.
+  // After --fork-session claude writes a new jsonl that we need to clean
+  // up — the CLI doesn't expose the fork id, so we diff before/after.
+  const projectDir = session.cwd
+    ? join(homedir(), '.claude', 'projects', session.cwd.replace(/\//g, '-'))
+    : null;
+  const before = projectDir ? await snapshotJsonlIds(projectDir) : new Set<string>();
+
   const args = ['-p', question, '--resume', session.id];
   if (!opts.inPlace) args.push('--fork-session');
   // claude --resume only finds sessions whose project matches the current
   // cwd, so we spawn the subprocess in the original working directory.
-  // Fallback to undefined (inherit) when cwd isn't recorded.
-  const r = await run('claude', args, opts.timeoutMs ?? DEFAULT_TIMEOUT_MS, session.cwd);
-  // Claude's -p mode prints the answer on stdout. Strip trailing whitespace.
+  const r = await run('claude', args, autoTimeout(session, opts.timeoutMs), session.cwd);
+
+  // Clean up any jsonl file claude created (the fork). We never touch
+  // the original session id file nor anything that predates our call.
+  let cleanedUp = false;
+  if (!opts.inPlace && projectDir) {
+    const after = await snapshotJsonlIds(projectDir);
+    for (const id of after) {
+      if (id === session.id) continue;
+      if (before.has(id)) continue;
+      await unlink(join(projectDir, `${id}.jsonl`)).catch(() => {
+        /* best effort */
+      });
+      // claude also creates a sibling directory <id>/ for tool results.
+      await rmrf(join(projectDir, id));
+      cleanedUp = true;
+    }
+  }
+
   return {
     runtime: 'claude-code',
     session_id: session.id,
     answer: r.stdout.trim(),
     raw_stdout: r.stdout,
     raw_stderr: r.stderr,
-    cleaned_up: true, // claude handles its own state
+    cleaned_up: cleanedUp,
+    timed_out: r.timedOut,
+    exit_code: r.code,
   };
+}
+
+async function snapshotJsonlIds(dir: string): Promise<Set<string>> {
+  try {
+    const entries = await readdir(dir);
+    return new Set(
+      entries.filter((e) => e.endsWith('.jsonl')).map((e) => e.slice(0, -'.jsonl'.length)),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+async function rmrf(path: string): Promise<void> {
+  try {
+    const { rm } = await import('node:fs/promises');
+    await rm(path, { recursive: true, force: true });
+  } catch {
+    /* best effort */
+  }
 }
 
 // ====================================================================
@@ -157,7 +218,7 @@ async function askCodex(
   const r = await run(
     'codex',
     ['exec', 'resume', targetId, question],
-    opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    autoTimeout(session, opts.timeoutMs),
     session.cwd,
   );
 
@@ -178,6 +239,8 @@ async function askCodex(
     raw_stdout: r.stdout,
     raw_stderr: r.stderr,
     cleaned_up: cleanupPath !== null,
+    timed_out: r.timedOut,
+    exit_code: r.code,
   };
 }
 
@@ -268,7 +331,7 @@ async function askHermes(
   const r = await run(
     'hermes',
     ['chat', '-Q', '-q', question, '--resume', targetId],
-    opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    autoTimeout(session, opts.timeoutMs),
   );
 
   if (forkId) await cleanupHermesFork(forkId);
@@ -282,6 +345,8 @@ async function askHermes(
     raw_stdout: r.stdout,
     raw_stderr: r.stderr,
     cleaned_up: forkId !== null,
+    timed_out: r.timedOut,
+    exit_code: r.code,
   };
 }
 
@@ -345,7 +410,7 @@ async function askOpenClaw(
   const r = await run(
     'openclaw',
     ['agent', '--session-id', targetId, '--message', question, '--local', '--json'],
-    opts.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    autoTimeout(session, opts.timeoutMs),
   );
 
   if (cleanupPath) {
@@ -363,6 +428,8 @@ async function askOpenClaw(
     raw_stdout: r.stdout,
     raw_stderr: r.stderr,
     cleaned_up: cleanupPath !== null,
+    timed_out: r.timedOut,
+    exit_code: r.code,
   };
 }
 

@@ -20,16 +20,29 @@ import {
   deriveTitle,
   isSystemPrompt,
   previewPrompt,
+  sampleItems,
   textFromAnthropicContent,
 } from '../derive.ts';
-import type { NormalizedMessage, NormalizedSession, SessionAdapter } from '../types.ts';
+import type {
+  ListOptions,
+  NormalizedMessage,
+  NormalizedSession,
+  SamplingConfig,
+  SessionAdapter,
+} from '../types.ts';
 
 function defaultRoot(): string {
   return join(homedir(), '.openclaw', 'agents');
 }
 
-async function listSessionFiles(root: string): Promise<string[]> {
-  const files: { path: string; mtime: number }[] = [];
+interface FileInfo {
+  path: string;
+  mtime: number;
+  size: number;
+}
+
+async function listSessionFiles(root: string): Promise<FileInfo[]> {
+  const files: FileInfo[] = [];
   let agents: string[];
   try {
     agents = await readdir(root);
@@ -49,14 +62,14 @@ async function listSessionFiles(root: string): Promise<string[]> {
       const full = join(sessDir, e);
       try {
         const fs = await stat(full);
-        if (fs.isFile()) files.push({ path: full, mtime: fs.mtimeMs });
+        if (fs.isFile()) files.push({ path: full, mtime: fs.mtimeMs, size: fs.size });
       } catch {
         /* skip */
       }
     }
   }
   files.sort((a, b) => b.mtime - a.mtime);
-  return files.map((f) => f.path);
+  return files;
 }
 
 function idFromFilename(name: string): string | null {
@@ -69,13 +82,15 @@ interface ScanResult {
   model?: string;
   first_user_prompt?: string;
   last_user_prompt?: string;
+  all_user_prompts: string[];
+  last_assistant_preview?: string;
   started_at?: string;
   last_active_at?: string;
   message_count: number;
 }
 
 async function scanSession(path: string): Promise<ScanResult> {
-  const res: ScanResult = { message_count: 0 };
+  const res: ScanResult = { message_count: 0, all_user_prompts: [] };
   for await (const d of readJsonl(path)) {
     if (!d || typeof d !== 'object') continue;
     const t = (d as any).type;
@@ -100,8 +115,12 @@ async function scanSession(path: string): Promise<ScanResult> {
       if (!m) continue;
       const text = clean(textFromAnthropicContent(m.content));
       if (m.role === 'user' && text && !isSystemPrompt(text)) {
-        if (!res.first_user_prompt) res.first_user_prompt = previewPrompt(text);
-        res.last_user_prompt = previewPrompt(text);
+        const preview = previewPrompt(text);
+        res.all_user_prompts.push(preview);
+        if (!res.first_user_prompt) res.first_user_prompt = preview;
+        res.last_user_prompt = preview;
+      } else if (m.role === 'assistant' && text) {
+        res.last_assistant_preview = previewPrompt(text);
       }
     }
   }
@@ -130,17 +149,18 @@ export class OpenClawAdapter implements SessionAdapter {
     }
   }
 
-  async list(options?: { limit?: number; since?: Date }): Promise<NormalizedSession[]> {
+  async list(options?: ListOptions): Promise<NormalizedSession[]> {
     const files = await listSessionFiles(this.root);
     const since = options?.since?.toISOString() ?? '';
     const limit = options?.limit ?? Number.POSITIVE_INFINITY;
+    const sampling = options?.sampling;
     const out: NormalizedSession[] = [];
-    for (const path of files) {
+    for (const f of files) {
       if (out.length >= limit) break;
-      const base = path.split('/').pop() ?? '';
+      const base = f.path.split('/').pop() ?? '';
       const id = idFromFilename(base);
       if (!id) continue;
-      const r = await scanSession(path);
+      const r = await scanSession(f.path);
       if (since && r.last_active_at && r.last_active_at < since) continue;
       out.push({
         runtime: this.runtime,
@@ -152,15 +172,21 @@ export class OpenClawAdapter implements SessionAdapter {
         model: r.model,
         first_user_prompt: r.first_user_prompt,
         last_user_prompt: r.last_user_prompt,
+        sampled_user_prompts: sampleItems(r.all_user_prompts, sampling),
+        last_assistant_preview: r.last_assistant_preview,
         message_count: r.message_count,
-        raw_path: path,
+        size_bytes: f.size,
+        raw_path: f.path,
       });
     }
     return out;
   }
 
-  async get(id: string): Promise<NormalizedSession | null> {
-    const all = await this.list();
+  async get(
+    id: string,
+    options?: { sampling?: SamplingConfig },
+  ): Promise<NormalizedSession | null> {
+    const all = await this.list({ sampling: options?.sampling });
     return all.find((s) => s.id === id) ?? null;
   }
 

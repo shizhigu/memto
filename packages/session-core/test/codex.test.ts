@@ -109,6 +109,18 @@ describe('CodexAdapter', () => {
     expect(ours?.model).toBe('gpt-5-codex');
     expect(ours?.first_user_prompt).toBe('find me the bug in parser.ts');
     expect(ours?.last_user_prompt).toBe('ship it');
+    expect(ours?.sampled_user_prompts).toEqual([
+      'find me the bug in parser.ts',
+      'ship it',
+    ]);
+    expect(ours?.last_assistant_preview).toBe('Found it on line 42.');
+    expect(ours?.size_bytes).toBeGreaterThan(0);
+  });
+
+  it('honors sampling=first-n', async () => {
+    const list = await a().list({ limit: 10, sampling: { strategy: 'first-n', count: 1 } });
+    const ours = list.find((s) => s.id === sessionId);
+    expect(ours?.sampled_user_prompts).toEqual(['find me the bug in parser.ts']);
   });
 
   it('messages returns user + assistant events in order', async () => {

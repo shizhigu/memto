@@ -133,6 +133,16 @@ describe('HermesAdapter', () => {
     expect(byId.get('sess_b')?.title).toBe('quick tax question');
   });
 
+  it('populates sampled_user_prompts + last_assistant_preview', async () => {
+    const list = await a().list({ limit: 10 });
+    const a_ = list.find((s) => s.id === 'sess_a');
+    expect(a_?.sampled_user_prompts).toEqual([
+      'login is broken in safari',
+      'thanks, that worked',
+    ]);
+    expect(a_?.last_assistant_preview).toBe('Let me check the cookie policy.');
+  });
+
   it('messages returns in timestamp order', async () => {
     const msgs = await a().messages('sess_a');
     expect(msgs.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);

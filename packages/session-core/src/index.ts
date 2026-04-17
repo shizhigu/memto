@@ -18,13 +18,25 @@ import { CodexAdapter } from './adapters/codex.ts';
 import { HermesAdapter } from './adapters/hermes.ts';
 import { OpenClawAdapter } from './adapters/openclaw.ts';
 import type {
+  ListOptions,
   NormalizedMessage,
   NormalizedSession,
   Runtime,
+  SamplingConfig,
+  SamplingStrategy,
   SessionAdapter,
 } from './types.ts';
 
-export type { NormalizedMessage, NormalizedSession, Runtime, SessionAdapter };
+export type {
+  ListOptions,
+  NormalizedMessage,
+  NormalizedSession,
+  Runtime,
+  SamplingConfig,
+  SamplingStrategy,
+  SessionAdapter,
+};
+export { DEFAULT_SAMPLING, sampleItems } from './derive.ts';
 export { ask, type AskOptions, type AskResult } from './resume.ts';
 export { ClaudeCodeAdapter, CodexAdapter, HermesAdapter, OpenClawAdapter };
 
@@ -53,6 +65,11 @@ export interface ListAllOptions {
   since?: Date;
   /** Restrict to a subset of runtimes. */
   runtimes?: Runtime[];
+  /**
+   * How to sample the `sampled_user_prompts` field on each session.
+   * Default: `{ strategy: 'evenly-spaced', count: 5 }`.
+   */
+  sampling?: SamplingConfig;
 }
 
 /**
@@ -68,9 +85,10 @@ export async function listAllSessions(
   const selected = filter ? avail.filter((a) => filter.has(a.runtime)) : avail;
   const limit = options.limitPerRuntime ?? 50;
   const since = options.since;
+  const sampling = options.sampling;
   const results = await Promise.all(
     selected.map((a) =>
-      a.list({ limit, since }).catch((err) => {
+      a.list({ limit, since, sampling }).catch((err) => {
         console.error(`[mneme] adapter ${a.runtime} failed:`, err);
         return [] as NormalizedSession[];
       }),
@@ -89,11 +107,12 @@ export async function listAllSessions(
 export async function getSession(
   runtime: Runtime,
   id: string,
+  options?: { sampling?: SamplingConfig },
 ): Promise<NormalizedSession | null> {
   const a = allAdapters.find((a) => a.runtime === runtime);
   if (!a) return null;
   if (!(await a.isAvailable())) return null;
-  return a.get(id);
+  return a.get(id, options);
 }
 
 /** Fetch the full message history for (runtime, id). */

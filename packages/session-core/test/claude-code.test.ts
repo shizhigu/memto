@@ -86,6 +86,28 @@ describe('ClaudeCodeAdapter', () => {
     expect(s.message_count).toBe(3);
     expect(s.first_user_prompt).toBe('help me add auth to this app');
     expect(s.last_user_prompt).toBe('use sessions not JWT');
+    expect(s.size_bytes).toBeGreaterThan(0);
+    expect(s.sampled_user_prompts).toEqual([
+      'help me add auth to this app',
+      'use sessions not JWT',
+    ]);
+    expect(s.last_assistant_preview).toBe('ok, I will add auth.');
+  });
+
+  it('honors sampling config (last-n)', async () => {
+    const list = await a().list({
+      limit: 10,
+      sampling: { strategy: 'last-n', count: 1 },
+    });
+    expect(list[0].sampled_user_prompts).toEqual(['use sessions not JWT']);
+  });
+
+  it('honors sampling config (none)', async () => {
+    const list = await a().list({
+      limit: 10,
+      sampling: { strategy: 'none' },
+    });
+    expect(list[0].sampled_user_prompts).toEqual([]);
   });
 
   it('get(id) returns the same session', async () => {

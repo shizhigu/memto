@@ -89,6 +89,9 @@ describe('OpenClawAdapter', () => {
     expect(s.cwd).toBe('/Users/fake/.openclaw/workspace');
     expect(s.model).toBe('claude-sonnet-4-6');
     expect(s.first_user_prompt).toBe('deploy the site');
+    expect(s.last_assistant_preview).toBe('deploying now.');
+    expect(s.sampled_user_prompts).toEqual(['deploy the site']);
+    expect(s.size_bytes).toBeGreaterThan(0);
   });
 
   it('messages returns all three in order', async () => {

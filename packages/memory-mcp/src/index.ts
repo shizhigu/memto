@@ -23,8 +23,8 @@ import {
   ask,
   getSession,
   listAllSessions,
-  type NormalizedSession,
   type Runtime,
+  type SamplingConfig,
 } from '@mneme/session-core';
 
 // ====================================================================
@@ -75,6 +75,28 @@ const TOOLS = [
           type: 'number',
           description: 'Only include sessions active in the last N days.',
         },
+        sampling_strategy: {
+          type: 'string',
+          enum: ['evenly-spaced', 'first-n', 'last-n', 'head-and-tail', 'every-nth', 'all', 'none'],
+          description:
+            'How to pick representative user prompts per session (field `sampled_user_prompts`). Default "evenly-spaced".',
+        },
+        sampling_count: {
+          type: 'number',
+          description: 'Prompt count for evenly-spaced / first-n / last-n (default 5).',
+        },
+        sampling_head: {
+          type: 'number',
+          description: 'For head-and-tail: number of prompts from the start (default 2).',
+        },
+        sampling_tail: {
+          type: 'number',
+          description: 'For head-and-tail: number of prompts from the end (default 2).',
+        },
+        sampling_stride: {
+          type: 'number',
+          description: 'For every-nth: step size (default 3).',
+        },
       },
     },
   },
@@ -122,6 +144,24 @@ const TOOLS = [
 // Tool implementations
 // ====================================================================
 
+function samplingFromArgs(args: Record<string, unknown>): SamplingConfig | undefined {
+  const keys = [
+    'sampling_strategy',
+    'sampling_count',
+    'sampling_head',
+    'sampling_tail',
+    'sampling_stride',
+  ];
+  if (!keys.some((k) => args[k] !== undefined)) return undefined;
+  return {
+    strategy: (args.sampling_strategy as SamplingConfig['strategy']) ?? undefined,
+    count: typeof args.sampling_count === 'number' ? args.sampling_count : undefined,
+    head: typeof args.sampling_head === 'number' ? args.sampling_head : undefined,
+    tail: typeof args.sampling_tail === 'number' ? args.sampling_tail : undefined,
+    stride: typeof args.sampling_stride === 'number' ? args.sampling_stride : undefined,
+  };
+}
+
 async function toolListAgents(args: Record<string, unknown>): Promise<unknown> {
   const runtime = typeof args.runtime === 'string' ? (args.runtime as Runtime) : undefined;
   const limit = typeof args.limit === 'number' ? args.limit : 20;
@@ -129,11 +169,13 @@ async function toolListAgents(args: Record<string, unknown>): Promise<unknown> {
   const since = sinceDays
     ? new Date(Date.now() - sinceDays * 24 * 60 * 60 * 1000)
     : undefined;
+  const sampling = samplingFromArgs(args);
 
   const sessions = await listAllSessions({
     limitPerRuntime: limit,
     runtimes: runtime ? [runtime] : undefined,
     since,
+    sampling,
   });
 
   const trimmed = sessions.slice(0, limit).map((s) => ({
@@ -148,7 +190,10 @@ async function toolListAgents(args: Record<string, unknown>): Promise<unknown> {
     last_active_at: s.last_active_at,
     first_user_prompt: s.first_user_prompt,
     last_user_prompt: s.last_user_prompt,
+    sampled_user_prompts: s.sampled_user_prompts,
+    last_assistant_preview: s.last_assistant_preview,
     message_count: s.message_count,
+    size_bytes: s.size_bytes,
     parent_session_id: s.parent_session_id,
   }));
 

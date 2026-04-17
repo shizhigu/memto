@@ -4,7 +4,7 @@ import { createReadStream, existsSync } from 'node:fs';
  * Streaming JSONL reader. Lazily parses each line and yields the object,
  * skipping malformed lines silently (session files occasionally have
  * partial trailing lines from a killed process). Uses node fs so the same
- * code runs under bun (fast) and under plain node (via `npx memto`).
+ * code runs under bun (fast) and under plain node (via `npx memto-cli`).
  */
 export async function* readJsonl(path: string): AsyncGenerator<any, void, void> {
   if (!existsSync(path)) return;

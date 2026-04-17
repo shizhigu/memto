@@ -1,11 +1,12 @@
 {
-  "name": "memto",
+  "name": "memto-cli",
   "version": "0.1.0",
   "description": "Wake up any past AI coding-agent session and ask it a question. Works with Claude Code, Codex, Hermes, OpenClaw.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "memto": "./dist/cli.js"
+    "memto": "./dist/cli.js",
+    "memto-cli": "./dist/cli.js"
   },
   "files": [
     "dist",

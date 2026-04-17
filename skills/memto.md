@@ -92,5 +92,5 @@ often the interesting signal.
 
 ## Install / update
 
-The CLI is auto-installed on first use via `npx memto`. To install
-globally: `npm i -g memto`. Source: <https://github.com/shizhigu/memto>.
+The CLI is auto-installed on first use via `npx memto-cli`. To install
+globally: `npm i -g memto-cli`. Source: <https://github.com/shizhigu/memto>.

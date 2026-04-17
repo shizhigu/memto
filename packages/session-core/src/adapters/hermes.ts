@@ -79,7 +79,7 @@ export class HermesAdapter implements SessionAdapter {
     try {
       const s = await stat(this.dbPath);
       if (!s.isFile()) return false;
-      // When running under plain node via `npx memto`, bun:sqlite is stubbed
+      // When running under plain node via `npx memto-cli`, bun:sqlite is stubbed
       // and throws on construction — report unavailable instead of crashing.
       try {
         const db = new Database(this.dbPath);

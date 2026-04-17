@@ -1,6 +1,6 @@
 // Build script: bundle packages/cli + session-core into a single
 // Node-compatible JS file at dist/cli.js. No TS toolchain required at install
-// time — users just `npx memto` and Node runs the bundle.
+// time — users just `npx memto-cli` and Node runs the bundle.
 import { readFileSync, writeFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

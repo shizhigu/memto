@@ -1,5 +1,5 @@
 // Node-runtime stub for bun:sqlite. The hermes adapter uses SQLite; when the
-// CLI runs under plain node via `npx memto`, the adapter simply reports
+// CLI runs under plain node via `npx memto-cli`, the adapter simply reports
 // hermes as unavailable instead of crashing on import.
 export class Database {
   constructor() {

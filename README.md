@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-7bd88f?style=flat-square"/></a>
-  <img alt="npm" src="https://img.shields.io/badge/install-npx%20memto-c3f0b8?style=flat-square"/>
+  <img alt="npm" src="https://img.shields.io/badge/install-npx%20memto--cli-c3f0b8?style=flat-square"/>
   <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D20-f4ede0?style=flat-square"/>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-5e9bff?style=flat-square"/>
   <img alt="Tests" src="https://img.shields.io/badge/tests-64%20passing-7bd88f?style=flat-square"/>
@@ -61,10 +61,10 @@ The other four have no idea. You, the human, are the only thing connecting them,
 
 ```bash
 # one-shot, via npx (no install needed)
-npx memto list
+npx memto-cli list
 
 # or install globally
-npm i -g memto
+npm i -g memto-cli
 memto --help
 ```
 

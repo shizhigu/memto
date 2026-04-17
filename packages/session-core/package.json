@@ -1,5 +1,5 @@
 {
-  "name": "@mneme/session-core",
+  "name": "@memento/session-core",
   "version": "0.1.0",
   "description": "Universal adapter for AI coding agent session stores (Claude Code, Codex, Hermes, OpenClaw)",
   "license": "MIT",

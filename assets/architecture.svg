@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" role="img" aria-label="memento architecture diagram">
+  <defs>
+    <linearGradient id="bg-arch" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d0b09"/>
+      <stop offset="100%" stop-color="#181210"/>
+    </linearGradient>
+    <filter id="box-shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="3"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.3"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="10" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#8b7260"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="700" fill="url(#bg-arch)"/>
+
+  <!-- Layer 1: Any MCP client (top) -->
+  <g transform="translate(600, 60)" filter="url(#box-shadow)">
+    <rect x="-280" y="-28" width="560" height="56" rx="8" fill="#241d18" stroke="#4a3520" stroke-width="1.5"/>
+    <text y="-4" font-family="-apple-system, sans-serif" font-size="16" font-weight="700" text-anchor="middle" fill="#f5b94c">Any MCP client</text>
+    <text y="15" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle" fill="#9a8970">Claude Code · Cursor · Zed · Codex · your own</text>
+  </g>
+
+  <!-- arrow: client → mcp server -->
+  <path d="M 600 95 L 600 165" stroke="#8b7260" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="610" y="135" font-family="ui-monospace, monospace" font-size="11" fill="#9a8970">stdio · JSON-RPC</text>
+
+  <!-- Layer 2: memory-mcp -->
+  <g transform="translate(600, 205)" filter="url(#box-shadow)">
+    <rect x="-320" y="-48" width="640" height="96" rx="10" fill="#2a1f16" stroke="#f5b94c" stroke-width="1.5"/>
+    <text y="-22" font-family="-apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle" fill="#fbe8a7">@memento/memory-mcp</text>
+    <text y="-2" font-family="ui-monospace, monospace" font-size="11" text-anchor="middle" fill="#9a8970">zero-dep stdio server · ~250 lines</text>
+    <!-- two tool pills -->
+    <g transform="translate(-130, 24)">
+      <rect x="-72" y="-14" width="144" height="28" rx="14" fill="#3a2a1a" stroke="#6a4a2a" stroke-width="1"/>
+      <text y="5" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle" fill="#f5b94c">list_agents()</text>
+    </g>
+    <g transform="translate(130, 24)">
+      <rect x="-72" y="-14" width="144" height="28" rx="14" fill="#3a2a1a" stroke="#6a4a2a" stroke-width="1"/>
+      <text y="5" font-family="ui-monospace, monospace" font-size="12" text-anchor="middle" fill="#f5b94c">ask_agents()</text>
+    </g>
+  </g>
+
+  <!-- arrow: mcp → core -->
+  <path d="M 600 255 L 600 320" stroke="#8b7260" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Layer 3: session-core (the library) -->
+  <g transform="translate(600, 375)" filter="url(#box-shadow)">
+    <rect x="-430" y="-60" width="860" height="120" rx="10" fill="#2a1f16" stroke="#d9893a" stroke-width="1.5"/>
+    <text y="-36" font-family="-apple-system, sans-serif" font-size="17" font-weight="700" text-anchor="middle" fill="#fbe8a7">@memento/session-core</text>
+    <text y="-18" font-family="ui-monospace, monospace" font-size="11" text-anchor="middle" fill="#9a8970">NormalizedSession · ask() · sampling strategies · fork + cleanup</text>
+
+    <!-- 4 adapter boxes -->
+    <g transform="translate(-330, 28)" font-family="ui-monospace, monospace" font-size="11">
+      <rect x="-70" y="-16" width="140" height="32" rx="6" fill="#3a1e15" stroke="#d97757" stroke-width="1"/>
+      <text y="4" text-anchor="middle" fill="#f0c2a8">claude-code adapter</text>
+    </g>
+    <g transform="translate(-110, 28)" font-family="ui-monospace, monospace" font-size="11">
+      <rect x="-70" y="-16" width="140" height="32" rx="6" fill="#152640" stroke="#5e9bff" stroke-width="1"/>
+      <text y="4" text-anchor="middle" fill="#bcd4f5">codex adapter</text>
+    </g>
+    <g transform="translate(110, 28)" font-family="ui-monospace, monospace" font-size="11">
+      <rect x="-70" y="-16" width="140" height="32" rx="6" fill="#3a2a0a" stroke="#f5b94c" stroke-width="1"/>
+      <text y="4" text-anchor="middle" fill="#fbe8a7">hermes adapter</text>
+    </g>
+    <g transform="translate(330, 28)" font-family="ui-monospace, monospace" font-size="11">
+      <rect x="-70" y="-16" width="140" height="32" rx="6" fill="#0f2a18" stroke="#7bd88f" stroke-width="1"/>
+      <text y="4" text-anchor="middle" fill="#c8eed2">openclaw adapter</text>
+    </g>
+  </g>
+
+  <!-- arrows from each adapter down to its store -->
+  <path d="M 270 435 L 180 525" stroke="#8b7260" stroke-width="2" fill="none" marker-end="url(#arrow)" stroke-opacity="0.6"/>
+  <path d="M 490 435 L 445 525" stroke="#8b7260" stroke-width="2" fill="none" marker-end="url(#arrow)" stroke-opacity="0.6"/>
+  <path d="M 710 435 L 725 525" stroke="#8b7260" stroke-width="2" fill="none" marker-end="url(#arrow)" stroke-opacity="0.6"/>
+  <path d="M 930 435 L 1010 525" stroke="#8b7260" stroke-width="2" fill="none" marker-end="url(#arrow)" stroke-opacity="0.6"/>
+
+  <!-- Layer 4: 4 native stores -->
+  <g font-family="ui-monospace, monospace" font-size="10" text-anchor="middle">
+    <g transform="translate(180, 555)">
+      <rect x="-100" y="-22" width="200" height="60" rx="8" fill="#1a1410" stroke="#3a2a1a" stroke-width="1"/>
+      <text y="-4" fill="#9a8970">~/.claude/projects/</text>
+      <text y="16" fill="#6a5a4a">*.jsonl</text>
+    </g>
+    <g transform="translate(445, 555)">
+      <rect x="-100" y="-22" width="200" height="60" rx="8" fill="#1a1410" stroke="#3a2a1a" stroke-width="1"/>
+      <text y="-4" fill="#9a8970">~/.codex/sessions/</text>
+      <text y="16" fill="#6a5a4a">yyyy/mm/dd/*.jsonl</text>
+    </g>
+    <g transform="translate(725, 555)">
+      <rect x="-100" y="-22" width="200" height="60" rx="8" fill="#1a1410" stroke="#3a2a1a" stroke-width="1"/>
+      <text y="-4" fill="#9a8970">~/.hermes/state.db</text>
+      <text y="16" fill="#6a5a4a">SQLite + FTS5</text>
+    </g>
+    <g transform="translate(1010, 555)">
+      <rect x="-100" y="-22" width="200" height="60" rx="8" fill="#1a1410" stroke="#3a2a1a" stroke-width="1"/>
+      <text y="-4" fill="#9a8970">~/.openclaw/agents/</text>
+      <text y="16" fill="#6a5a4a">*.jsonl</text>
+    </g>
+  </g>
+
+  <!-- Fork strategy labels -->
+  <g font-family="ui-monospace, monospace" font-size="9" text-anchor="middle" fill="#d9893a">
+    <text x="180" y="645">fork: native --fork-session</text>
+    <text x="445" y="645">fork: cp + patch session_meta.id</text>
+    <text x="725" y="645">fork: INSERT … SELECT</text>
+    <text x="1010" y="645">fork: cp + patch line-0.id</text>
+  </g>
+
+  <!-- footer label -->
+  <text x="600" y="685" font-family="-apple-system, sans-serif" font-size="11" text-anchor="middle" fill="#6a5a4a" font-style="italic">
+    one normalized shape, four native stores, all fork paths end-to-end verified
+  </text>
+</svg>

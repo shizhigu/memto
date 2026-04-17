@@ -13,7 +13,7 @@ let adapter: CodexAdapter;
 const sessionId = 'deadbeef-1234-5678-9abc-def012345678';
 
 beforeAll(async () => {
-  fakeHome = await mkdtemp(join(tmpdir(), 'mneme-codex-'));
+  fakeHome = await mkdtemp(join(tmpdir(), 'memento-codex-'));
   adapter = new CodexAdapter({
     root: join(fakeHome, '.codex', 'sessions'),
     indexPath: join(fakeHome, '.codex', 'session_index.jsonl'),

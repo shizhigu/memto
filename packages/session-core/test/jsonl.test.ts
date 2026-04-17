@@ -12,7 +12,7 @@ import { readJsonl, readJsonlAll } from '../src/jsonl.ts';
 let tmpDir: string | null = null;
 
 async function fixture(content: string): Promise<string> {
-  if (!tmpDir) tmpDir = await mkdtemp(join(tmpdir(), 'mneme-jsonl-'));
+  if (!tmpDir) tmpDir = await mkdtemp(join(tmpdir(), 'memento-jsonl-'));
   const p = join(tmpDir, `${Date.now()}-${Math.random().toString(36).slice(2, 6)}.jsonl`);
   await writeFile(p, content);
   return p;
@@ -46,7 +46,7 @@ describe('readJsonl', () => {
 
   it('returns empty for missing file', async () => {
     const out: any[] = [];
-    for await (const d of readJsonl('/tmp/this-does-not-exist-mneme.jsonl')) out.push(d);
+    for await (const d of readJsonl('/tmp/this-does-not-exist-memento.jsonl')) out.push(d);
     expect(out).toEqual([]);
   });
 

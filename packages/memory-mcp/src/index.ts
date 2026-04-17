@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * @mneme/memory-mcp — stdio MCP server exposing two tools.
+ * @memento/memory-mcp — stdio MCP server exposing two tools.
  *
  *   list_agents(runtime?, limit?, since?)
  *     Returns recent sessions across all installed AI agent runtimes
@@ -25,7 +25,7 @@ import {
   listAllSessions,
   type Runtime,
   type SamplingConfig,
-} from '@mneme/session-core';
+} from '@memento/session-core';
 
 // ====================================================================
 // Protocol primitives — minimal JSON-RPC 2.0 framing
@@ -46,7 +46,7 @@ interface JsonRpcResponse {
 }
 
 const PROTOCOL_VERSION = '2024-11-05';
-const SERVER_INFO = { name: 'mneme-memory-mcp', version: '0.1.0' };
+const SERVER_INFO = { name: 'memento-memory-mcp', version: '0.1.0' };
 
 // ====================================================================
 // Tool schemas (JSON Schema subset — MCP consumers use this for UI)
@@ -365,6 +365,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error(`[mneme-mcp] fatal:`, err);
+  console.error(`[memento-mcp] fatal:`, err);
   process.exit(1);
 });

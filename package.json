@@ -1,5 +1,5 @@
 {
-  "name": "mneme",
+  "name": "memento",
   "version": "0.1.0",
   "private": true,
   "description": "Universal session adapter + memory MCP for AI coding agents",

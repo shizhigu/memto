@@ -67,7 +67,7 @@ describe('memory-mcp stdio protocol', () => {
     expect(lines.length).toBeGreaterThanOrEqual(2);
 
     const init = JSON.parse(lines[0]);
-    expect(init.result.serverInfo.name).toBe('mneme-memory-mcp');
+    expect(init.result.serverInfo.name).toBe('memento-memory-mcp');
     expect(init.result.capabilities.tools).toBeDefined();
 
     const tools = JSON.parse(lines[1]);

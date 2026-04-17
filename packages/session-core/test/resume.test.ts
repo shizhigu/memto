@@ -15,7 +15,7 @@ import { extractHermesAnswer } from '../src/resume.ts';
 let tmp: string;
 
 beforeAll(async () => {
-  tmp = await mkdtemp(join(tmpdir(), 'mneme-resume-'));
+  tmp = await mkdtemp(join(tmpdir(), 'memento-resume-'));
 });
 afterAll(async () => {
   await rm(tmp, { recursive: true, force: true });

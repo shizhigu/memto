@@ -1,9 +1,9 @@
 /**
- * @mneme/session-core — universal adapter for AI coding agent session stores.
+ * @memento/session-core — universal adapter for AI coding agent session stores.
  *
  * Quick start:
  *
- *   import { listAllSessions, ask } from '@mneme/session-core';
+ *   import { listAllSessions, ask } from '@memento/session-core';
  *
  *   const sessions = await listAllSessions({ limit: 20 });
  *   const resume = sessions.find(s => s.title.includes('resume'));
@@ -89,7 +89,7 @@ export async function listAllSessions(
   const results = await Promise.all(
     selected.map((a) =>
       a.list({ limit, since, sampling }).catch((err) => {
-        console.error(`[mneme] adapter ${a.runtime} failed:`, err);
+        console.error(`[memento] adapter ${a.runtime} failed:`, err);
         return [] as NormalizedSession[];
       }),
     ),

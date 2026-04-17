@@ -13,7 +13,7 @@ let adapter: OpenClawAdapter;
 const sessionId = '01932abc-cafe-babe-feed-deadbeef0001';
 
 beforeAll(async () => {
-  fakeHome = await mkdtemp(join(tmpdir(), 'mneme-openclaw-'));
+  fakeHome = await mkdtemp(join(tmpdir(), 'memento-openclaw-'));
   adapter = new OpenClawAdapter({ root: join(fakeHome, '.openclaw', 'agents') });
 
   const sessDir = join(fakeHome, '.openclaw', 'agents', 'main', 'sessions');

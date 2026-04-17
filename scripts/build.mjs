@@ -38,13 +38,15 @@ let code = readFileSync(OUT, 'utf8');
 code = code.replaceAll('__MEMTO_VERSION__', version);
 if (!code.startsWith('#!')) code = `#!/usr/bin/env node\n${code}`;
 
-// Replace the `import { Database } from "bun:sqlite"` statement with an
-// INLINE stub class. Referencing a separate .mjs file would bake an
-// absolute path into the bundle (see v0.1.1/v0.1.2 regression).
-const sqliteStub = `const Database=class{constructor(){throw new Error("[memto] hermes adapter requires the bun runtime (install from https://bun.sh and use 'bunx memto-cli').")}};`;
+// Replace the `import { Database as Database2 } from "bun:sqlite"` statement
+// (bun bundle aliases the name) with an INLINE stub class. Referencing a
+// separate .mjs file would bake an absolute path into the bundle.
 code = code.replace(
-  /import\s*\{\s*Database[^}]*\}\s*from\s*["']bun:sqlite["']\s*;?/,
-  sqliteStub,
+  /import\s*\{\s*Database(\s+as\s+(\w+))?\s*\}\s*from\s*["']bun:sqlite["']\s*;?/g,
+  (_m, _as, alias) => {
+    const name = alias || 'Database';
+    return `const ${name}=class{constructor(){throw new Error("[memto] hermes adapter requires the bun runtime (install from https://bun.sh and use 'bunx memto-cli').")}};`;
+  },
 );
 
 // Replace the cfonts import with an inline renderer that returns the

@@ -4,11 +4,17 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.1.4] — 2026-04-17
+
+### Fixed
+
+- Add `/g` flag to the `bun:sqlite` replacement regex. The bundle contained two `bun:sqlite` import statements; earlier versions only stubbed the first, so the CLI still crashed under plain node. `npx memto-cli` now truly runs everywhere.
+
 ## [0.1.3] — 2026-04-17
 
 ### Fixed
 
-- Actually inline the `bun:sqlite` stub (v0.1.2's build script still emitted an absolute path). `npx memto-cli` now runs cleanly on user machines under plain node.
+- Inline the `bun:sqlite` stub instead of referencing an absolute path (first attempt; still buggy — superseded by v0.1.4).
 
 ## [0.1.2] — 2026-04-17
 

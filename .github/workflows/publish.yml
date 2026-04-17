@@ -27,6 +27,11 @@ jobs:
         with:
           node-version: 20
 
+      # Trusted Publisher OIDC support landed in npm 11.5.1 — node 20 ships
+      # with a much older npm, so upgrade explicitly.
+      - name: Upgrade npm
+        run: npm install -g npm@latest
+
       - name: Install
         run: bun install --frozen-lockfile
 

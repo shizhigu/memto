@@ -39,8 +39,15 @@ jobs:
       - name: Verify bundle runs under plain node
         run: node dist/cli.js --help
 
-      # Uses npm's OIDC Trusted Publisher — no NPM_TOKEN secret required.
-      # Configure once at https://www.npmjs.com/package/memto-cli/access
-      # (owner: shizhigu, repo: memto, workflow: publish.yml).
+      - name: Debug OIDC claims
+        run: |
+          TOKEN=$(curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org" | jq -r .value)
+          PAYLOAD=$(echo "$TOKEN" | cut -d. -f2)
+          pad=$((4 - ${#PAYLOAD} % 4))
+          [ "$pad" -ne 4 ] && PAYLOAD="$PAYLOAD$(printf '=%.0s' $(seq 1 $pad))"
+          echo "--- OIDC JWT claims ---"
+          echo "$PAYLOAD" | base64 -d 2>/dev/null | jq '{sub, aud, repository, repository_owner, workflow_ref, job_workflow_ref, ref, event_name, environment}'
+
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: npm publish --provenance --access public --loglevel=verbose 2>&1 | tail -40

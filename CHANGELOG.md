@@ -9,10 +9,10 @@ All notable changes to this project will be documented in this file. Format loos
 ### Added
 
 - First public release.
-- `@memento/session-core`: universal adapter for Claude Code, Codex, Hermes, and OpenClaw session stores. Exposes a common `NormalizedSession` / `NormalizedMessage` shape + three methods per adapter (`isAvailable`, `list`, `get`, `messages`).
+- `@memto/session-core`: universal adapter for Claude Code, Codex, Hermes, and OpenClaw session stores. Exposes a common `NormalizedSession` / `NormalizedMessage` shape + three methods per adapter (`isAvailable`, `list`, `get`, `messages`).
 - Non-destructive fork + resume for every runtime via `ask(session, question)`.
-- `@memento/memory-mcp`: zero-dependency MCP stdio server exposing two tools — `list_agents` and `ask_agents`.
+- `memto` CLI with `list` and `ask` subcommands, both with `--json` output. Ships as a single bundled JS file via `npx memto`.
+- `skills/memto.md` — drop-in Claude Code skill that teaches agents when and how to invoke `memto`.
 - `isSystemPrompt()` helper to skip shell-injected prompt wrappers (`<environment_context>`, `Sender (untrusted metadata):`, Claude slash-command blobs).
-- Synthetic-fixture test suites for every adapter plus JSONL streaming helpers (38 tests).
-- End-to-end smoke tests for the MCP server (3 tests).
+- Synthetic-fixture test suites for every adapter plus JSONL streaming helpers (64 tests).
 - `examples/list-all.ts` and `examples/ask-agents.ts`.

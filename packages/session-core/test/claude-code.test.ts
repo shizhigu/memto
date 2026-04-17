@@ -13,7 +13,7 @@ let fakeHome: string;
 let adapter: ClaudeCodeAdapter;
 
 beforeAll(async () => {
-  fakeHome = await mkdtemp(join(tmpdir(), 'memento-claude-'));
+  fakeHome = await mkdtemp(join(tmpdir(), 'memto-claude-'));
   adapter = new ClaudeCodeAdapter({ root: join(fakeHome, '.claude', 'projects') });
 
   const proj = join(fakeHome, '.claude', 'projects', '-Users-fake-myproj');

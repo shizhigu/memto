@@ -78,7 +78,16 @@ export class HermesAdapter implements SessionAdapter {
   async isAvailable(): Promise<boolean> {
     try {
       const s = await stat(this.dbPath);
-      return s.isFile();
+      if (!s.isFile()) return false;
+      // When running under plain node via `npx memto`, bun:sqlite is stubbed
+      // and throws on construction — report unavailable instead of crashing.
+      try {
+        const db = new Database(this.dbPath);
+        db.close?.();
+        return true;
+      } catch {
+        return false;
+      }
     } catch {
       return false;
     }

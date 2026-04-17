@@ -14,8 +14,8 @@
     "types": ["bun-types"],
     "baseUrl": ".",
     "paths": {
-      "@memento/session-core": ["./packages/session-core/src/index.ts"],
-      "@memento/session-core/*": ["./packages/session-core/src/*"]
+      "@memto/session-core": ["./packages/session-core/src/index.ts"],
+      "@memto/session-core/*": ["./packages/session-core/src/*"]
     }
   },
   "include": [

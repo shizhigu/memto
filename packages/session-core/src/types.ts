@@ -3,7 +3,7 @@
  *
  * A `NormalizedSession` is the lowest-common-denominator shape across
  * Claude Code / Codex / Hermes / OpenClaw. Each adapter lifts its
- * native format into this shape so downstream tools (memory-mcp, dashboards,
+ * native format into this shape so downstream tools (the CLI, dashboards,
  * analytics) don't have to care which agent produced a session.
  */
 

@@ -1,9 +1,9 @@
 /**
- * @memento/session-core — universal adapter for AI coding agent session stores.
+ * @memto/session-core — universal adapter for AI coding agent session stores.
  *
  * Quick start:
  *
- *   import { listAllSessions, ask } from '@memento/session-core';
+ *   import { listAllSessions, ask } from '@memto/session-core';
  *
  *   const sessions = await listAllSessions({ limit: 20 });
  *   const resume = sessions.find(s => s.title.includes('resume'));
@@ -74,8 +74,8 @@ export interface ListAllOptions {
 
 /**
  * Enumerate sessions across every available runtime, merged and sorted
- * by most recent activity. This is the primary entry point for any UI /
- * MCP tool that wants a unified view of the user's past agent sessions.
+ * by most recent activity. Primary entry point for any UI / CLI / caller
+ * that wants a unified view of the user's past agent sessions.
  */
 export async function listAllSessions(
   options: ListAllOptions = {},
@@ -89,7 +89,7 @@ export async function listAllSessions(
   const results = await Promise.all(
     selected.map((a) =>
       a.list({ limit, since, sampling }).catch((err) => {
-        console.error(`[memento] adapter ${a.runtime} failed:`, err);
+        console.error(`[memto] adapter ${a.runtime} failed:`, err);
         return [] as NormalizedSession[];
       }),
     ),

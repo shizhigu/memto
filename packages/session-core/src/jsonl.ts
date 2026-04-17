@@ -1,19 +1,17 @@
+import { createReadStream, existsSync } from 'node:fs';
+
 /**
  * Streaming JSONL reader. Lazily parses each line and yields the object,
  * skipping malformed lines silently (session files occasionally have
- * partial trailing lines from a killed process).
+ * partial trailing lines from a killed process). Uses node fs so the same
+ * code runs under bun (fast) and under plain node (via `npx memto`).
  */
 export async function* readJsonl(path: string): AsyncGenerator<any, void, void> {
-  const file = Bun.file(path);
-  if (!(await file.exists())) return;
-  const stream = file.stream();
-  const reader = stream.getReader();
-  const decoder = new TextDecoder();
+  if (!existsSync(path)) return;
+  const stream = createReadStream(path, { encoding: 'utf8', highWaterMark: 256 * 1024 });
   let buf = '';
-  while (true) {
-    const { value, done } = await reader.read();
-    if (value) buf += decoder.decode(value, { stream: true });
-    if (done) break;
+  for await (const chunk of stream) {
+    buf += chunk;
     let nl: number;
     // biome-ignore lint/suspicious/noAssignInExpressions: standard loop
     while ((nl = buf.indexOf('\n')) >= 0) {
@@ -23,7 +21,7 @@ export async function* readJsonl(path: string): AsyncGenerator<any, void, void> 
       try {
         yield JSON.parse(line);
       } catch {
-        // malformed line — skip
+        /* skip malformed */
       }
     }
   }

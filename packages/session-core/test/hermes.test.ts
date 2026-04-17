@@ -14,7 +14,7 @@ let fakeHome: string;
 let adapter: HermesAdapter;
 
 beforeAll(async () => {
-  fakeHome = await mkdtemp(join(tmpdir(), 'memento-hermes-'));
+  fakeHome = await mkdtemp(join(tmpdir(), 'memto-hermes-'));
   const dbPath = join(fakeHome, '.hermes', 'state.db');
   adapter = new HermesAdapter({ dbPath });
 

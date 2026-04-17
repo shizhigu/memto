@@ -1,0 +1,11 @@
+{
+  "name": "@memto/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@memto/session-core": "workspace:*",
+    "cfonts": "^3.3.1"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "@memento/session-core",
+  "name": "@memto/session-core",
   "version": "0.1.0",
   "description": "Universal adapter for AI coding agent session stores (Claude Code, Codex, Hermes, OpenClaw)",
   "license": "MIT",
@@ -19,8 +19,7 @@
     "hermes",
     "openclaw",
     "session",
-    "memory",
-    "mcp"
+    "memory"
   ],
   "peerDependencies": {
     "bun-types": "*"

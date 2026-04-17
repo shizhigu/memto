@@ -1,25 +1,57 @@
 {
-  "name": "memento",
+  "name": "memto",
   "version": "0.1.0",
-  "private": true,
-  "description": "Universal session adapter + memory MCP for AI coding agents",
+  "description": "Wake up any past AI coding-agent session and ask it a question. Works with Claude Code, Codex, Hermes, OpenClaw.",
   "license": "MIT",
   "type": "module",
-  "workspaces": ["packages/*"],
+  "bin": {
+    "memto": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "bun test",
     "typecheck": "bun x tsc --noEmit",
     "lint": "bun x biome check .",
     "format": "bun x biome format --write .",
+    "build": "node scripts/build.mjs",
+    "prepublishOnly": "bun run build",
     "example:list": "bun run examples/list-all.ts",
     "example:ask": "bun run examples/ask-agents.ts"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "memory",
+    "claude-code",
+    "codex",
+    "hermes",
+    "openclaw",
+    "session",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shizhigu/memto.git"
+  },
+  "homepage": "https://github.com/shizhigu/memto#readme",
+  "bugs": {
+    "url": "https://github.com/shizhigu/memto/issues"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@types/bun": "latest",
+    "cfonts": "^3.3.1",
     "typescript": "^5.7.0"
   },
   "engines": {
+    "node": ">=20",
     "bun": ">=1.2.0"
   }
 }

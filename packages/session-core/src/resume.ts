@@ -350,21 +350,49 @@ async function askHermes(
   };
 }
 
-/** Hermes -Q mode wraps the reply in a box + a trailing session_id line. */
-function extractHermesAnswer(stdout: string): string {
-  // Strip the Hermes box frame (lines starting with ╭ │ ╰).
-  const lines = stdout.split('\n').filter((l) => {
-    const t = l.trim();
-    if (!t) return false;
-    if (t.startsWith('╭') || t.startsWith('╰') || t.startsWith('session_id:')) return false;
-    return true;
-  });
-  // Inside-the-box lines are prefixed with "│ " in some terminal widths.
-  return lines
-    .map((l) => l.replace(/^│\s?/, '').replace(/\s*│$/, '').trim())
-    .filter((l) => l.length > 0)
-    .join('\n')
-    .trim();
+/**
+ * Hermes `-Q` (quiet) mode is supposed to suppress chrome but still leaks
+ * a surprising amount. We've seen:
+ *
+ *   ↻ Resumed session fork_xxx (5 user messages, 7 total messages)
+ *   "fork-test-fork_xxx" (5 user messages, 7 total messages)
+ *
+ *   ╭─ ⚕ Hermes ────────────────────────────────────────────────────────╮
+ *   │ The actual answer text, possibly wrapped across multiple lines    │
+ *   ╰───────────────────────────────────────────────────────────────────╯
+ *
+ *   session_id: fork_xxx
+ *
+ * This extractor strips every known noise pattern. Exported for unit
+ * testing since the real hermes binary isn't available in CI.
+ */
+export function extractHermesAnswer(stdout: string): string {
+  const noise: RegExp[] = [
+    // resume banner
+    /^↻\s/,
+    // "quoted title" (N user messages, M total messages) — fork stats line
+    /^["'][^"']*["']\s*\(\d+\s+(user|total)\s+messages/i,
+    // bare "(N user messages, M total messages)" continuation
+    /^\(\d+\s+(user|total)\s+messages/i,
+    // box top/bottom frame (may include the ⚕ glyph, dashes, any text)
+    /^[╭╰╔╚┌└]/,
+    // trailing session id
+    /^session_id\s*[:=]/i,
+    // hermes "thinking..." spinner fragments
+    /^⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏/,
+  ];
+
+  const cleaned: string[] = [];
+  for (const raw of stdout.split('\n')) {
+    let line = raw;
+    // strip sidewall chars at either end (any combination of │ ║ ┃ and padding)
+    line = line.replace(/^[│║┃]\s?/, '').replace(/\s*[│║┃]\s*$/, '');
+    const t = line.trim();
+    if (!t) continue;
+    if (noise.some((p) => p.test(t))) continue;
+    cleaned.push(t);
+  }
+  return cleaned.join('\n').trim();
 }
 
 // ====================================================================

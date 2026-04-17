@@ -10,6 +10,7 @@ import { Database } from 'bun:sqlite';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { extractHermesAnswer } from '../src/resume.ts';
 
 let tmp: string;
 
@@ -53,6 +54,59 @@ describe('codex fork file', () => {
       .map((l) => JSON.parse(l));
     expect(reread[0].payload.id).toBe('NEW');
     expect(reread[1].payload.message).toBe('hi');
+  });
+});
+
+describe('extractHermesAnswer', () => {
+  it('strips resume banner + session_id footer (real fixture 1)', () => {
+    const stdout = `↻ Resumed session fork_mo2nin01_c3ef9811 (1 user message, 16 total messages)
+/Users/gushizhi/Desktop/resume/resume/new_resume/main.tex
+`;
+    expect(extractHermesAnswer(stdout)).toBe(
+      '/Users/gushizhi/Desktop/resume/resume/new_resume/main.tex',
+    );
+  });
+
+  it('strips box frame + title stats + session_id (real fixture 2)', () => {
+    const stdout = `↻ Resumed session fork_1776413560_0a9b59e8608c
+"fork-test-fork_1776413560_0a9b59e8608c" (5 user messages, 7 total messages)
+
+╭─ ⚕ Hermes ───────────────────────────────────────────────────────────────────╮
+This session was about tailoring your portfolio and writing a job-application email for the ChipAgents Applications Engineer role.
+
+session_id: fork_1776413560_0a9b59e8608c
+`;
+    expect(extractHermesAnswer(stdout)).toBe(
+      'This session was about tailoring your portfolio and writing a job-application email for the ChipAgents Applications Engineer role.',
+    );
+  });
+
+  it('handles sidewall-wrapped multiline answer', () => {
+    const stdout = `↻ Resumed session X
+╭─ ⚕ Hermes ──────────╮
+│ First line of answer │
+│ Second line            │
+╰──────────────────────╯
+session_id: X
+`;
+    expect(extractHermesAnswer(stdout)).toBe('First line of answer\nSecond line');
+  });
+
+  it('returns trimmed plain text when no chrome is present', () => {
+    expect(extractHermesAnswer('\n  just the answer  \n')).toBe('just the answer');
+  });
+
+  it('empty input yields empty string', () => {
+    expect(extractHermesAnswer('')).toBe('');
+    expect(extractHermesAnswer('\n\n\n')).toBe('');
+  });
+
+  it('does not strip content lines that happen to contain a pipe', () => {
+    const stdout = `↻ Resumed session X
+the command is: ls -la | grep foo
+session_id: X
+`;
+    expect(extractHermesAnswer(stdout)).toBe('the command is: ls -la | grep foo');
   });
 });
 

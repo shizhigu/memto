@@ -39,7 +39,8 @@ jobs:
       - name: Verify bundle runs under plain node
         run: node dist/cli.js --help
 
+      # Uses npm's OIDC Trusted Publisher — no NPM_TOKEN secret required.
+      # Configure once at https://www.npmjs.com/package/memto-cli/access
+      # (owner: shizhigu, repo: memto, workflow: publish.yml).
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

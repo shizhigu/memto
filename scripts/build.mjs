@@ -38,11 +38,13 @@ let code = readFileSync(OUT, 'utf8');
 code = code.replaceAll('__MEMTO_VERSION__', version);
 if (!code.startsWith('#!')) code = `#!/usr/bin/env node\n${code}`;
 
-// bun:sqlite fallback: when running under node, swap the import for a stub
-// that reports hermes as unavailable instead of crashing.
+// Replace the `import { Database } from "bun:sqlite"` statement with an
+// INLINE stub class. Referencing a separate .mjs file would bake an
+// absolute path into the bundle (see v0.1.1/v0.1.2 regression).
+const sqliteStub = `const Database=class{constructor(){throw new Error("[memto] hermes adapter requires the bun runtime (install from https://bun.sh and use 'bunx memto-cli').")}};`;
 code = code.replace(
-  /from ["']bun:sqlite["']/g,
-  `from ${JSON.stringify(resolve(ROOT, 'scripts/sqlite-shim.mjs'))}`,
+  /import\s*\{\s*Database[^}]*\}\s*from\s*["']bun:sqlite["']\s*;?/,
+  sqliteStub,
 );
 
 // Replace the cfonts import with an inline renderer that returns the

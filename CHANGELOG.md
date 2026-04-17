@@ -4,11 +4,17 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-04-17
+
+### Fixed
+
+- Actually inline the `bun:sqlite` stub (v0.1.2's build script still emitted an absolute path). `npx memto-cli` now runs cleanly on user machines under plain node.
+
 ## [0.1.2] — 2026-04-17
 
 ### Fixed
 
-- Published bundle crashed on user machines with `ERR_MODULE_NOT_FOUND` for `/home/runner/.../sqlite-shim.mjs`. The build script now inlines the `bun:sqlite` stub into the bundle instead of emitting an absolute-path import. `npx memto-cli` now runs cleanly under plain node.
+- Attempted to fix the `bun:sqlite` import path (superseded by v0.1.3 — do not use).
 
 ## [0.1.1] — 2026-04-17
 

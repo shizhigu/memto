@@ -27,27 +27,18 @@ const prerendered = cfonts.render('memto', {
 });
 const bannerAnsi = (prerendered && prerendered.string) || 'memto';
 
-// Bun build → single-file node bundle. `bun:sqlite` stays external — the CLI
-// falls back gracefully when the hermes adapter's native import is missing.
+// Externalize both SQLite backends + cfonts. The sqlite shim picks the
+// right one at runtime (bun:sqlite under bun, better-sqlite3 under node).
+// `createRequire` from node:module wraps the dynamic load; bun build
+// keeps the require() calls intact since we pass --external.
 execSync(
-  `bun build ${JSON.stringify(ENTRY)} --outfile ${JSON.stringify(OUT)} --target node --format esm --external bun:sqlite --external cfonts`,
+  `bun build ${JSON.stringify(ENTRY)} --outfile ${JSON.stringify(OUT)} --target node --format esm --external bun:sqlite --external better-sqlite3 --external cfonts`,
   { stdio: 'inherit', cwd: ROOT },
 );
 
 let code = readFileSync(OUT, 'utf8');
 code = code.replaceAll('__MEMTO_VERSION__', version);
 if (!code.startsWith('#!')) code = `#!/usr/bin/env node\n${code}`;
-
-// Replace the `import { Database as Database2 } from "bun:sqlite"` statement
-// (bun bundle aliases the name) with an INLINE stub class. Referencing a
-// separate .mjs file would bake an absolute path into the bundle.
-code = code.replace(
-  /import\s*\{\s*Database(\s+as\s+(\w+))?\s*\}\s*from\s*["']bun:sqlite["']\s*;?/g,
-  (_m, _as, alias) => {
-    const name = alias || 'Database';
-    return `const ${name}=class{constructor(){throw new Error("[memto] hermes adapter requires the bun runtime (install from https://bun.sh and use 'bunx memto-cli').")}};`;
-  },
-);
 
 // Replace the cfonts import with an inline renderer that returns the
 // pre-rendered ANSI string. Keeps the bundle self-contained.

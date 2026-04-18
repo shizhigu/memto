@@ -11,11 +11,11 @@
  * `list()` but downstream tools can run full-text search directly.
  */
 
-import { Database } from 'bun:sqlite';
 import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { clean, deriveTitle, previewPrompt, sampleItems } from '../derive.ts';
+import { Database, hasSqliteBackend } from '../sqlite.ts';
 import type {
   ListOptions,
   NormalizedMessage,
@@ -48,10 +48,8 @@ interface MessageRow {
 }
 
 function openDb(path: string): Database {
-  // Read-only isn't safe here because Hermes uses WAL journalling — Bun's
-  // `readonly: true` can't prepare statements without touching the -shm
-  // companion file. We open read/write but our adapter never issues any
-  // INSERT/UPDATE/DELETE; the fork path uses its own connection explicitly.
+  // Hermes uses WAL journalling. We open read/write but our adapter never
+  // issues INSERT/UPDATE/DELETE; the fork path uses its own connection.
   return new Database(path);
 }
 
@@ -102,7 +100,7 @@ export class HermesAdapter implements SessionAdapter {
       const sampling = options?.sampling;
 
       const rows = db
-        .query<SessionRow, [number, number]>(
+        .query<SessionRow>(
           `SELECT id, source, model, started_at, ended_at, title, parent_session_id, message_count
              FROM sessions
             WHERE started_at >= ?
@@ -114,12 +112,12 @@ export class HermesAdapter implements SessionAdapter {
       // Pull all user prompts + last assistant reply per session in one
       // prepared statement. Slightly more work than "just the first", but
       // it keeps the list view meaningful for long sessions that drifted.
-      const userStmt = db.query<{ content: string | null }, [string]>(
+      const userStmt = db.query<{ content: string | null }>(
         `SELECT content FROM messages
           WHERE session_id = ? AND role = 'user' AND content IS NOT NULL
        ORDER BY timestamp ASC`,
       );
-      const lastAssistantStmt = db.query<{ content: string | null }, [string]>(
+      const lastAssistantStmt = db.query<{ content: string | null }>(
         `SELECT content FROM messages
           WHERE session_id = ? AND role = 'assistant' AND content IS NOT NULL
        ORDER BY timestamp DESC LIMIT 1`,
@@ -173,7 +171,7 @@ export class HermesAdapter implements SessionAdapter {
     const db = openDb(this.dbPath);
     try {
       const r = db
-        .query<SessionRow, [string]>(
+        .query<SessionRow>(
           `SELECT id, source, model, started_at, ended_at, title, parent_session_id, message_count
              FROM sessions WHERE id = ?`,
         )
@@ -181,7 +179,7 @@ export class HermesAdapter implements SessionAdapter {
       if (!r) return null;
 
       const userPrompts = db
-        .query<{ content: string | null }, [string]>(
+        .query<{ content: string | null }>(
           `SELECT content FROM messages WHERE session_id = ? AND role = 'user' AND content IS NOT NULL
         ORDER BY timestamp ASC`,
         )
@@ -190,7 +188,7 @@ export class HermesAdapter implements SessionAdapter {
         .filter((t) => t.length > 0)
         .map((t) => previewPrompt(t));
       const lastAssistant = db
-        .query<{ content: string | null }, [string]>(
+        .query<{ content: string | null }>(
           `SELECT content FROM messages WHERE session_id = ? AND role = 'assistant' AND content IS NOT NULL
         ORDER BY timestamp DESC LIMIT 1`,
         )
@@ -226,7 +224,7 @@ export class HermesAdapter implements SessionAdapter {
     const db = openDb(this.dbPath);
     try {
       const rows = db
-        .query<MessageRow, [string]>(
+        .query<MessageRow>(
           `SELECT session_id, role, content, tool_name, timestamp
              FROM messages
             WHERE session_id = ?

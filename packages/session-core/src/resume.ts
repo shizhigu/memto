@@ -17,7 +17,7 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { readFile, readdir, unlink, writeFile } from 'node:fs/promises';
-import { Database } from 'bun:sqlite';
+import { Database } from './sqlite.ts';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
 import type { NormalizedSession, Runtime } from './types.ts';

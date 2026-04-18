@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-04-17
+
+### Fixed
+
+- Hermes works under plain node (`npx memto-cli`). Previously the hermes adapter imported `bun:sqlite` directly, which made hermes invisible to anyone installing memto via npm. Added a small shim at `packages/session-core/src/sqlite.ts` that picks `bun:sqlite` under bun and `better-sqlite3` under node. `better-sqlite3` is now a runtime dep; npm fetches the right prebuilt binary per platform at install time.
+- End-to-end verified under node: `list`, `messages`, and `ask` all work against hermes sessions.
+
 ## [0.3.0] — 2026-04-17
 
 ### Added

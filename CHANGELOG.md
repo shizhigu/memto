@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-04-17
+
+### Changed
+
+- README: removed an unsubstantiated claim about skill front-matter being a universal standard. Let the format speak for itself.
+
 ## [0.3.2] — 2026-04-17
 
 ### Changed

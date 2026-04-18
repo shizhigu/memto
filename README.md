@@ -84,7 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/shizhigu/memto/main/skills/memto.md
   > ~/.claude/skills/memto.md   # adjust path for your agent
 ```
 
-The skill file uses the standard `---\nname:\ndescription:\n---` front-matter format that every major agent CLI now supports. Once dropped in, your agent automatically learns when to use `memto messages` (cheap lookup) vs `memto ask` (forked synthesis).
+Once dropped in, your agent automatically learns when to use `memto messages` (cheap lookup) vs `memto ask` (forked synthesis).
 
 ---
 

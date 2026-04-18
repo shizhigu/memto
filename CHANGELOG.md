@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-04-17
+
+### Added
+
+- `memto ask --model <name>` — override the model used to answer the forked question. Typical use: fork a huge opus session but answer the question with haiku for cost/speed. Runtime support is uneven and the CLI is honest about it:
+  - **claude-code** reliable (aliases `haiku`/`sonnet`/`opus` or full id)
+  - **codex** reliable (OpenAI id, e.g. `gpt-5-nano`)
+  - **hermes** best-effort — valid names depend on the user's gateway config
+  - **openclaw** ignored — no per-invocation model flag exists
+
 ## [0.2.0] — 2026-04-17
 
 ### Breaking

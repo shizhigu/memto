@@ -88,10 +88,11 @@ async function cmdAsk(argv: Argv) {
   const json = argv.includes('--json');
   const idArg = flag(argv, '--id');
   const runtimeHint = flag(argv, '--runtime') as Runtime | undefined;
+  const model = flag(argv, '--model');
 
   if (!idArg) {
     console.error(
-      `${c.red('usage:')} memto ask --id <id>[,<id>...] [--question "..."] [--runtime <rt>] [--timeout ms] [--json]\n${c.dim('  pipe from `memto list --json` to choose IDs:')}\n${c.dim('  memto list --json | jq -r \'.[] | select(.cwd|test("billing")) | .id\'')}`,
+      `${c.red('usage:')} memto ask --id <id>[,<id>...] [--question "..."] [--model <name>] [--runtime <rt>] [--timeout ms] [--json]\n${c.dim('  pipe from `memto list --json` to choose IDs:')}\n${c.dim('  memto list --json | jq -r \'.[] | select(.cwd|test("billing")) | .id\'')}`,
     );
     process.exit(1);
   }
@@ -144,7 +145,7 @@ async function cmdAsk(argv: Argv) {
   const results = await Promise.all(
     sessions.map(async (s) => {
       try {
-        const r = await ask(s, question, { timeoutMs });
+        const r = await ask(s, question, { timeoutMs, model });
         return { session: s, ...r, err: null as string | null };
       } catch (e) {
         return { session: s, answer: '', timed_out: false, err: (e as Error).message };
@@ -181,7 +182,7 @@ function help() {
   console.log(`  ${section('USAGE')}`);
   console.log(`    ${c.cream('memto list')}  ${c.dim('[--limit N] [--runtime …] [--json]')}`);
   console.log(
-    `    ${c.cream('memto ask')}   ${c.dim('--id <id>[,<id>…] [--question "…"] [--runtime <rt>] [--timeout ms] [--json]')}`,
+    `    ${c.cream('memto ask')}   ${c.dim('--id <id>[,<id>…] [--question "…"] [--model <name>] [--runtime <rt>] [--timeout ms] [--json]')}`,
   );
   console.log();
   console.log(`  ${section('TEACH YOUR AGENT')}`);

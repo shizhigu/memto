@@ -20,7 +20,24 @@ import { readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { Database } from './sqlite.ts';
 import { dirname, join } from 'node:path';
 import { homedir } from 'node:os';
-import type { NormalizedSession, Runtime } from './types.ts';
+import { ClaudeCodeAdapter } from './adapters/claude-code.ts';
+import { CodexAdapter } from './adapters/codex.ts';
+import { HermesAdapter } from './adapters/hermes.ts';
+import { OpenClawAdapter } from './adapters/openclaw.ts';
+import type { NormalizedSession, Runtime, SessionAdapter } from './types.ts';
+
+function adapterFor(runtime: Runtime): SessionAdapter {
+  switch (runtime) {
+    case 'claude-code':
+      return new ClaudeCodeAdapter();
+    case 'codex':
+      return new CodexAdapter();
+    case 'hermes':
+      return new HermesAdapter();
+    case 'openclaw':
+      return new OpenClawAdapter();
+  }
+}
 
 export interface AskOptions {
   /** Ask a question without a fork. The original session will be mutated. */
@@ -31,6 +48,21 @@ export interface AskOptions {
    * sessions (50+ MB) can genuinely take several minutes to reload.
    */
   timeoutMs?: number;
+  /**
+   * Reconstruct-mode window end. ISO-8601 timestamp; messages strictly
+   * after this are dropped from the fork. The forked agent answers without
+   * hindsight from later messages.
+   */
+  uptoTime?: string;
+  /**
+   * Reconstruct-mode window start. ISO-8601 timestamp; messages strictly
+   * before this are dropped. Pair with `uptoTime` to reconstruct a specific
+   * episode inside a long session — a true slice of memory, not a prefix.
+   *
+   * Together (`fromTime`, `uptoTime`) turn `ask` into a reconstructive
+   * episodic memory primitive: "what did I think during [window]?"
+   */
+  fromTime?: string;
 }
 
 export interface AskResult {
@@ -155,6 +187,7 @@ function sanitizeClaudeLine(line: any, newSessionId: string): any | null {
 
 async function forkClaudeSession(
   session: NormalizedSession,
+  window?: { fromTime?: string; uptoTime?: string },
 ): Promise<{ newId: string; newPath: string; projectDir: string }> {
   if (!session.raw_path) {
     throw new Error('claude-code adapter did not populate raw_path on the session');
@@ -168,6 +201,14 @@ async function forkClaudeSession(
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line);
+      // Reconstruct window — drop lines outside [fromTime, uptoTime].
+      // We keep lines without a timestamp (session metadata, tool artifacts)
+      // because claude needs them to recreate the session's initial state.
+      const ts = parsed.timestamp;
+      if (typeof ts === 'string') {
+        if (window?.uptoTime && ts > window.uptoTime) continue;
+        if (window?.fromTime && ts < window.fromTime) continue;
+      }
       const sanitized = sanitizeClaudeLine(parsed, newId);
       if (sanitized) out.push(JSON.stringify(sanitized));
     } catch {
@@ -188,7 +229,10 @@ async function askClaude(
   let projectDir: string | null = null;
 
   if (!opts.inPlace) {
-    const fork = await forkClaudeSession(session);
+    const fork = await forkClaudeSession(session, {
+      fromTime: opts.fromTime,
+      uptoTime: opts.uptoTime,
+    });
     targetId = fork.newId;
     newPath = fork.newPath;
     projectDir = fork.projectDir;
@@ -249,7 +293,10 @@ async function rmrf(path: string): Promise<void> {
 // Codex: cp jsonl + patch session_meta.payload.id
 // ====================================================================
 
-async function forkCodexFile(origPath: string): Promise<{ newId: string; newPath: string }> {
+async function forkCodexFile(
+  origPath: string,
+  window?: { fromTime?: string; uptoTime?: string },
+): Promise<{ newId: string; newPath: string }> {
   const raw = await readFile(origPath, 'utf8');
   const lines = raw.split('\n').filter((l) => l.length > 0);
   if (lines.length === 0) throw new Error(`codex session file is empty: ${origPath}`);
@@ -268,13 +315,28 @@ async function forkCodexFile(origPath: string): Promise<{ newId: string; newPath
   first.payload.id = newId;
   lines[0] = JSON.stringify(first);
 
-  // Same directory structure, fresh timestamp, new uuid. Codex scans the
-  // tree recursively so placement doesn't matter — we keep it next to the
-  // original for locality.
+  // Reconstruct window: drop lines outside [fromTime, uptoTime].
+  const kept: string[] = [lines[0]];
+  for (let i = 1; i < lines.length; i++) {
+    if (window?.uptoTime || window?.fromTime) {
+      try {
+        const obj = JSON.parse(lines[i]);
+        const ts = obj?.timestamp;
+        if (typeof ts === 'string') {
+          if (window.uptoTime && ts > window.uptoTime) continue;
+          if (window.fromTime && ts < window.fromTime) continue;
+        }
+      } catch {
+        /* non-JSON line — keep to be safe */
+      }
+    }
+    kept.push(lines[i]);
+  }
+
   const dir = dirname(origPath);
   const tsStamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const newPath = join(dir, `rollout-${tsStamp}-${newId}.jsonl`);
-  await writeFile(newPath, `${lines.join('\n')}\n`, { mode: 0o600 });
+  await writeFile(newPath, `${kept.join('\n')}\n`, { mode: 0o600 });
   return { newId, newPath };
 }
 
@@ -287,7 +349,10 @@ async function askCodex(
   let cleanupPath: string | null = null;
 
   if (!opts.inPlace) {
-    const { newId, newPath } = await forkCodexFile(session.raw_path);
+    const { newId, newPath } = await forkCodexFile(session.raw_path, {
+      fromTime: opts.fromTime,
+      uptoTime: opts.uptoTime,
+    });
     targetId = newId;
     cleanupPath = newPath;
   }
@@ -340,8 +405,15 @@ function extractCodexAnswer(stdout: string): string {
 
 const HERMES_DB = join(homedir(), '.hermes', 'state.db');
 
-async function forkHermesSession(origId: string): Promise<{ newId: string }> {
+async function forkHermesSession(
+  origId: string,
+  window?: { fromTime?: string; uptoTime?: string },
+): Promise<{ newId: string }> {
   const newId = `fork_${Date.now().toString(36)}_${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+  // Hermes stores timestamps as epoch seconds. Convert ISO-8601 input.
+  const fromEpoch = window?.fromTime ? Date.parse(window.fromTime) / 1000 : null;
+  const uptoEpoch = window?.uptoTime ? Date.parse(window.uptoTime) / 1000 : null;
+
   const db = new Database(HERMES_DB);
   try {
     db.run('BEGIN');
@@ -361,14 +433,25 @@ async function forkHermesSession(origId: string): Promise<{ newId: string }> {
          FROM sessions WHERE id = ?`,
       [newId, origId],
     );
+    // Reconstruct window: filter by timestamp directly in the INSERT.
+    const whereClauses: string[] = ['session_id = ?'];
+    const params: unknown[] = [newId, origId];
+    if (uptoEpoch != null) {
+      whereClauses.push('timestamp <= ?');
+      params.push(uptoEpoch);
+    }
+    if (fromEpoch != null) {
+      whereClauses.push('timestamp >= ?');
+      params.push(fromEpoch);
+    }
     db.run(
       `INSERT INTO messages (session_id, role, content, tool_call_id, tool_calls, tool_name,
            timestamp, token_count, finish_reason, reasoning, reasoning_details,
            codex_reasoning_items)
        SELECT ?, role, content, tool_call_id, tool_calls, tool_name, timestamp, token_count,
               finish_reason, reasoning, reasoning_details, codex_reasoning_items
-         FROM messages WHERE session_id = ?`,
-      [newId, origId],
+         FROM messages WHERE ${whereClauses.join(' AND ')}`,
+      params,
     );
     db.run('COMMIT');
   } catch (e) {
@@ -403,7 +486,10 @@ async function askHermes(
   let forkId: string | null = null;
 
   if (!opts.inPlace) {
-    const r = await forkHermesSession(session.id);
+    const r = await forkHermesSession(session.id, {
+      fromTime: opts.fromTime,
+      uptoTime: opts.uptoTime,
+    });
     targetId = r.newId;
     forkId = r.newId;
   }
@@ -479,7 +565,10 @@ export function extractHermesAnswer(stdout: string): string {
 // OpenClaw: cp jsonl + patch line 0
 // ====================================================================
 
-async function forkOpenClawFile(origPath: string): Promise<{ newId: string; newPath: string }> {
+async function forkOpenClawFile(
+  origPath: string,
+  window?: { fromTime?: string; uptoTime?: string },
+): Promise<{ newId: string; newPath: string }> {
   const newId = randomUUID();
   const raw = await readFile(origPath, 'utf8');
   const lines = raw.split('\n').filter((l) => l.length > 0);
@@ -494,10 +583,26 @@ async function forkOpenClawFile(origPath: string): Promise<{ newId: string; newP
     throw new Error(`expected session on line 0, got ${first?.type}`);
   }
   first.id = newId;
-  lines[0] = JSON.stringify(first);
+
+  const kept: string[] = [JSON.stringify(first)];
+  for (let i = 1; i < lines.length; i++) {
+    if (window?.fromTime || window?.uptoTime) {
+      try {
+        const obj = JSON.parse(lines[i]);
+        const ts = obj?.timestamp;
+        if (typeof ts === 'string') {
+          if (window.uptoTime && ts > window.uptoTime) continue;
+          if (window.fromTime && ts < window.fromTime) continue;
+        }
+      } catch {
+        /* keep non-JSON lines */
+      }
+    }
+    kept.push(lines[i]);
+  }
 
   const newPath = join(dirname(origPath), `${newId}.jsonl`);
-  await writeFile(newPath, `${lines.join('\n')}\n`, { mode: 0o600 });
+  await writeFile(newPath, `${kept.join('\n')}\n`, { mode: 0o600 });
   return { newId, newPath };
 }
 
@@ -510,7 +615,10 @@ async function askOpenClaw(
   let cleanupPath: string | null = null;
 
   if (!opts.inPlace) {
-    const f = await forkOpenClawFile(session.raw_path);
+    const f = await forkOpenClawFile(session.raw_path, {
+      fromTime: opts.fromTime,
+      uptoTime: opts.uptoTime,
+    });
     targetId = f.newId;
     cleanupPath = f.newPath;
   }
@@ -583,4 +691,57 @@ export async function ask(
       throw new Error(`unsupported runtime: ${String(_exhaustive)}`);
     }
   }
+}
+
+export interface ReconstructOptions extends AskOptions {
+  /** Window end — keep messages at or before this ISO-8601 timestamp. */
+  uptoTime?: string;
+  /** Window start — keep messages at or after this ISO-8601 timestamp. */
+  fromTime?: string;
+  /** 0-based NormalizedMessage index. Resolved to timestamp before fork. */
+  uptoMsg?: number;
+  /** 0-based NormalizedMessage index. Resolved to timestamp before fork. */
+  fromMsg?: number;
+}
+
+/**
+ * Reconstructive episodic memory primitive.
+ *
+ * Fork the session, truncate it to the window [fromTime, uptoTime] (either
+ * given directly as ISO-8601 timestamps or resolved from message indices),
+ * then ask the question against that trimmed fork. The agent answers as if
+ * it were looking at the session frozen in that window — no hindsight from
+ * later messages, no context from unrelated earlier episodes.
+ *
+ * Useful for:
+ *   - "what did I think at this moment?" (uptoTime only)
+ *   - "during the debate on March 15 afternoon, what was my position?"
+ *     (both fromTime and uptoTime set to isolate one episode)
+ *   - precise benchmark evaluation: give the agent exactly the evidence
+ *     available at a point in time and test what it can infer
+ */
+export async function reconstruct(
+  session: NormalizedSession,
+  question: string,
+  options: ReconstructOptions = {},
+): Promise<AskResult> {
+  let { fromTime, uptoTime } = options;
+
+  // Resolve message-index -> timestamp if needed.
+  if (options.fromMsg !== undefined || options.uptoMsg !== undefined) {
+    const adapter = adapterFor(session.runtime);
+    const msgs = await adapter.messages(session.id);
+    if (options.fromMsg !== undefined) {
+      const m = msgs[options.fromMsg];
+      if (!m) throw new Error(`--from-msg ${options.fromMsg} out of range (${msgs.length})`);
+      fromTime = fromTime ?? m.timestamp;
+    }
+    if (options.uptoMsg !== undefined) {
+      const m = msgs[options.uptoMsg];
+      if (!m) throw new Error(`--upto-msg ${options.uptoMsg} out of range (${msgs.length})`);
+      uptoTime = uptoTime ?? m.timestamp;
+    }
+  }
+
+  return ask(session, question, { ...options, fromTime, uptoTime });
 }

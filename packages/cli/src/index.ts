@@ -23,6 +23,7 @@ import {
   getSession,
   grepAllSessions,
   listAllSessions,
+  reconstruct,
 } from '@memto/session-core';
 import type { GrepHit, NormalizedMessage, NormalizedSession, Runtime } from '@memto/session-core';
 import {
@@ -278,6 +279,92 @@ async function cmdMessages(argv: Argv) {
   }
 }
 
+async function cmdReconstruct(argv: Argv) {
+  const idArg = flag(argv, '--id');
+  const question = flag(argv, '--question') ?? flag(argv, '-q');
+  const fromMsg = flag(argv, '--from-msg');
+  const uptoMsg = flag(argv, '--upto-msg');
+  const fromTime = flag(argv, '--from');
+  const uptoTime = flag(argv, '--upto');
+  const runtimeHint = flag(argv, '--runtime') as Runtime | undefined;
+  const timeoutMs = numFlag(argv, '--timeout', 120_000);
+  const json = argv.includes('--json');
+
+  if (!idArg || !question || (!fromMsg && !uptoMsg && !fromTime && !uptoTime)) {
+    console.error(
+      `${c.red('usage:')} memto reconstruct --id <id> --question "…" [--from-msg N] [--upto-msg M] [--from <iso>] [--upto <iso>] [--runtime <rt>] [--timeout ms] [--json]
+  ${c.dim('window must be specified (at least one of --from-msg / --upto-msg / --from / --upto).')}
+  ${c.dim('example: reconstruct what you thought during messages 20..40 of a session:')}
+    memto reconstruct --id <id> --from-msg 20 --upto-msg 40 -q "what was my position?"`,
+    );
+    process.exit(1);
+  }
+
+  const runtimes: Runtime[] = runtimeHint
+    ? [runtimeHint]
+    : ['claude-code', 'codex', 'hermes', 'openclaw'];
+  let session = null as Awaited<ReturnType<typeof getSession>>;
+  for (const rt of runtimes) {
+    session = await getSession(rt, idArg);
+    if (session) break;
+  }
+  if (!session) {
+    console.error(`${c.red('not found:')} no session with id ${idArg}`);
+    process.exit(2);
+  }
+
+  const t0 = performance.now();
+  const result = await reconstruct(session, question, {
+    timeoutMs,
+    fromMsg: fromMsg ? Number.parseInt(fromMsg, 10) : undefined,
+    uptoMsg: uptoMsg ? Number.parseInt(uptoMsg, 10) : undefined,
+    fromTime,
+    uptoTime,
+  });
+  const dt = performance.now() - t0;
+
+  if (json) {
+    process.stdout.write(
+      JSON.stringify(
+        {
+          question,
+          window: { fromMsg, uptoMsg, fromTime, uptoTime },
+          elapsed_ms: Math.round(dt),
+          session: {
+            runtime: session.runtime,
+            id: session.id,
+            title: session.title,
+            cwd: session.cwd,
+          },
+          ...result,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    return;
+  }
+
+  process.stdout.write(banner('reconstruct'));
+  console.log(`  ${section('SESSION')}  ${runtimeTag(session.runtime)} ${c.cream(truncate(session.title ?? '(untitled)', 56))}`);
+  const windowStr = [
+    fromMsg ? `from msg ${fromMsg}` : fromTime ? `from ${fromTime}` : null,
+    uptoMsg ? `upto msg ${uptoMsg}` : uptoTime ? `upto ${uptoTime}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  console.log(`  ${section('WINDOW')}  ${c.cream(windowStr)}`);
+  console.log(`  ${section('QUESTION')}  ${c.cream(question)}`);
+  console.log(`  ${section('ANSWER')}  ${forest(`(${(dt / 1000).toFixed(1)}s)`)}`);
+  console.log(`  ${rule(90)}`);
+  if (result.timed_out) console.log(`    ${c.red('timed out')}`);
+  else
+    console.log(
+      (result.answer || c.dim('(empty)')).split('\n').map((l) => `    ${c.cream(l)}`).join('\n'),
+    );
+  console.log();
+}
+
 async function cmdAsk(argv: Argv) {
   const question = flag(argv, '--question') ?? flag(argv, '-q');
   const timeoutMs = numFlag(argv, '--timeout', 120_000);
@@ -376,15 +463,18 @@ async function cmdAsk(argv: Argv) {
 function help() {
   process.stdout.write(banner());
   console.log(`  ${section('USAGE')}`);
-  console.log(`    ${c.cream('memto list')}      ${c.dim('[--limit N] [--runtime …] [--json]')}`);
+  console.log(`    ${c.cream('memto list')}         ${c.dim('[--limit N] [--runtime …] [--json]')}`);
   console.log(
-    `    ${c.cream('memto grep')}      ${c.dim('<pattern> [-i] [--role …] [--runtime …] [--since …] [--max-hits N] [--json]')}`,
+    `    ${c.cream('memto grep')}         ${c.dim('<pattern> [-i] [--role …] [--runtime …] [--since …] [--max-hits N] [--json]')}`,
   );
   console.log(
-    `    ${c.cream('memto messages')}  ${c.dim('--id <id> [--last N] [--head N] [--grep <pat>] [--role …] [--json]')}`,
+    `    ${c.cream('memto messages')}     ${c.dim('--id <id> [--last N] [--head N] [--grep <pat>] [--role …] [--json]')}`,
   );
   console.log(
-    `    ${c.cream('memto ask')}       ${c.dim('--id <id>[,<id>…] --question "…" [--runtime <rt>] [--timeout ms] [--json]')}`,
+    `    ${c.cream('memto ask')}          ${c.dim('--id <id>[,<id>…] --question "…" [--runtime <rt>] [--timeout ms] [--json]')}`,
+  );
+  console.log(
+    `    ${c.cream('memto reconstruct')}  ${c.dim('--id <id> --question "…" [--from-msg N] [--upto-msg M] [--from <iso>] [--upto <iso>]')}`,
   );
   console.log();
   console.log(`  ${section('TEACH YOUR AGENT')}`);
@@ -409,6 +499,9 @@ async function main() {
       break;
     case 'messages':
       await cmdMessages(rest);
+      break;
+    case 'reconstruct':
+      await cmdReconstruct(rest);
       break;
     case 'ask':
       await cmdAsk(rest);

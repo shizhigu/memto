@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-04-18
+
+### Added
+
+- `memto reconstruct --id <id> --question "…"` — **reconstructive episodic memory** primitive. Forks the session, truncates to a window `[from, upto]` (timestamps or 0-based message indices), then asks the question against that trimmed fork. The agent answers as if looking at the session frozen inside that window — no hindsight from later messages, no noise from unrelated earlier episodes. Supported flags: `--from-msg N`, `--upto-msg M`, `--from <iso>`, `--upto <iso>`.
+- `reconstruct()` exported from `@memto/session-core` plus `ReconstructOptions`. Works across all four runtimes — the window is applied inside the fork step (jsonl line filtering for claude-code/codex/openclaw, SQL `WHERE timestamp BETWEEN` for hermes).
+- `AskOptions` gained `fromTime` + `uptoTime` for programmatic callers who want the windowing without going through `reconstruct()`.
+
+### Philosophical note
+
+`ask` with no window is "replay the full session." `reconstruct` with a window is "what did my past self think at that exact moment?" These are meaningfully different queries even against the same session, and the distinction matters for cognitively-aligned memory access.
+
 ## [0.4.0] — 2026-04-18
 
 ### Added

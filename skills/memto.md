@@ -25,21 +25,36 @@ Do NOT use for:
 - Things visible in the current cwd (just read the files).
 - General knowledge questions unrelated to past sessions.
 
-## Four commands, one decision tree
+## Five commands, one decision tree
 
 ```
 Don't know which session the answer lives in?
-  → memto grep "<regex>" --json         (parallel scan every runtime, seconds)
+  → memto grep "<regex>" --json           (parallel scan every runtime, seconds)
 
 Already know the session, want specific content?
   → memto messages --id <id> --grep <pat> --json
 
-Already know the session, need the original agent's synthesis?
-  → memto ask --id <id> --question "…"  (forks + revives the agent)
+Need the agent's synthesis from the FULL session (latest state)?
+  → memto ask --id <id> --question "…"    (forks + revives with all hindsight)
+
+Need the agent's synthesis from a SPECIFIC WINDOW in the session?
+  → memto reconstruct --id <id> --from-msg N --upto-msg M --question "…"
+    (forks + truncates to the window + revives — no hindsight from outside)
 
 Just browsing what's there?
   → memto list --json --limit 30
 ```
+
+**`ask` vs `reconstruct`** is the key nuance:
+- `ask` = "based on the whole session so far, what's your answer?"
+- `reconstruct` = "freeze the session at messages 20..40 and answer from *that*
+  state — without knowing what came after, without noise from before."
+
+Use `reconstruct` for:
+- "what did I think before I learned X?" (set `--upto` to just before X)
+- "during the debate on March 15, what was my position?" (window both ends)
+- benchmark-style precise retrieval: give the agent only the evidence
+  available at a moment in time and test what it can reason about.
 
 Default to `grep` first. It's almost always the right first step for any
 "find the thing" question, because you usually don't know up front which

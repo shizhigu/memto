@@ -88,7 +88,7 @@ Once dropped in, your agent automatically learns when to use `memto messages` vs
 
 ---
 
-## 🔍 Four commands
+## 🔍 Five commands
 
 ### `memto list` — see every past session, merged
 
@@ -155,6 +155,25 @@ memto ask --id <session_id> --question "what did we decide about retry logic?"
 ```
 
 Use when raw content isn't enough — when you need the original agent's synthesis, not just its transcript. Fork is non-destructive; originals are never touched.
+
+### `memto reconstruct` — ask a window, not the whole session
+
+```bash
+# what did past-me think during messages 20..40?
+memto reconstruct --id <session_id> --from-msg 20 --upto-msg 40 \
+  --question "what was my position on the retry debate?"
+
+# what did I believe before I learned X?
+memto reconstruct --id <session_id> --upto 2026-03-15T10:30:00Z \
+  --question "what's the leading approach?"
+```
+
+Forks the session, truncates to the window `[from, upto]`, then asks. The
+agent answers from that slice only — **no hindsight from later messages, no
+noise from unrelated earlier episodes**. This is the closest thing memto has
+to cognitive science's "reconstructive episodic memory": you're not
+replaying the whole session, you're reconstructing what the agent could
+have known at that moment.
 
 ---
 

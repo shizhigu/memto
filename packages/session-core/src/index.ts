@@ -37,7 +37,13 @@ export type {
   SessionAdapter,
 };
 export { DEFAULT_SAMPLING, sampleItems } from './derive.ts';
-export { ask, type AskOptions, type AskResult } from './resume.ts';
+export {
+  ask,
+  reconstruct,
+  type AskOptions,
+  type AskResult,
+  type ReconstructOptions,
+} from './resume.ts';
 export { ClaudeCodeAdapter, CodexAdapter, HermesAdapter, OpenClawAdapter };
 
 const allAdapters: SessionAdapter[] = [

@@ -211,16 +211,16 @@ The *"tap on the shoulder"* is called **fork-resume** — we clone their session
 
 ---
 
-## 🎯 Why not Mem0 / Letta / Zep / chum-mem?
+## 🎯 Why not Mem0 / Letta / Zep?
 
-| | **memto** | Mem0 / Zep | Letta | chum-mem |
-|---|---|---|---|---|
-| Unit of memory | **whole past session, queryable live** | extracted facts in a vector DB | hierarchical summary tiers in one agent | atomic typed claims in a knowledge graph |
-| Cross-runtime | ✅ 4 runtimes, 1 interface | ❌ app-specific | ❌ per-agent | ❌ project-scoped |
-| Non-destructive read | ✅ fork-safe | n/a | ✅ internal only | n/a |
-| External dependencies | **0** — just node | ChromaDB etc. | Postgres / SQLite | Docker + Postgres + ChromaDB + Rust |
-| First-time cost | none — indexes what your CLIs already wrote | re-ETL every conversation | re-architect your agent | spin up a stack, wait for ingestion |
-| Best for | **the super-individual running 5+ AI tabs** | single-app long-term memory | single-agent role-played memory | one large monorepo, deep code+decision graph |
+| | **memto** | Mem0 / Zep | Letta |
+|---|---|---|---|
+| Unit of memory | **whole past session, queryable live** | extracted facts in a vector DB | hierarchical summary tiers in one agent |
+| Cross-runtime | ✅ 4 runtimes, 1 interface | ❌ app-specific | ❌ per-agent |
+| Non-destructive read | ✅ fork-safe | n/a | ✅ internal only |
+| External dependencies | **0** — just node | ChromaDB etc. | Postgres / SQLite |
+| First-time cost | none — indexes what your CLIs already wrote | re-ETL every conversation | re-architect your agent |
+| Best for | **the super-individual running 5+ AI tabs** | single-app long-term memory | single-agent role-played memory |
 
 The fundamental divide: everything on the right takes your agent conversations, **extracts** structured claims from them, and stores those claims elsewhere. `memto` doesn't extract. The raw session IS the memory — you just wake it up and ask.
 

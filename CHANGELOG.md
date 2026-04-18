@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-04-17
+
+### Changed
+
+- Dropped chum-mem from the comparison matrix — it's a very new/small project and not load-bearing for the contrast memto is trying to draw. Mem0, Letta, and Zep are the established incumbents; those are the real comparisons readers care about.
+
 ## [0.3.4] — 2026-04-17
 
 ### Changed

@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-17
+
+### Breaking
+
+- `memto ask <keyword>` is replaced with `memto ask --id <id>[,<id>...]`. Session selection is now the caller's job — the CLI no longer does substring matching over title/prompt/cwd. This was a hack that didn't handle CN/EN synonyms or fuzzy matches; pushing the decision out to LLM-driven callers (the bundled skill, or a human) yields much better session picks. Pipe from `memto list --json` to choose ids.
+- `--top N` flag is gone (no longer meaningful).
+- `--runtime <rt>` optional filter for disambiguating ids across runtimes.
+
+### Fixed
+
+- Claude Code fork now copies + sanitizes the session jsonl instead of relying on `claude --fork-session`. Sessions containing legacy `server_tool_use` or `tool_use` blocks whose ids don't match Anthropic's current pattern (e.g. cross-provider imports with `call_*` ids) would crash with `invalid_request_error`. The sanitizer strips bad-id blocks and their paired `*_tool_result` before resuming.
+
 ## [0.1.4] — 2026-04-17
 
 ### Fixed

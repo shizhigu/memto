@@ -3,14 +3,15 @@
  * memto CLI — one binary, two subcommands.
  *
  *   memto list [--limit N] [--runtime claude-code|codex|hermes|openclaw] [--json]
- *   memto ask  <keyword> [--question "..."] [--top N] [--json]
+ *   memto ask  --id <id>[,<id>...] [--question "..."] [--runtime <rt>] [--json]
  *
  * Agents integrate via the bundled skill at ./skills/memto.md — they call
  * the CLI through their existing Bash tool. Bundled via `bun build` into a
  * single dist/cli.js that runs under node ≥ 20.
  */
 
-import { ask, availableAdapters, listAllSessions } from '@memto/session-core';
+import { ask, availableAdapters, getSession, listAllSessions } from '@memto/session-core';
+import type { NormalizedSession, Runtime } from '@memto/session-core';
 import {
   banner,
   c,
@@ -81,49 +82,67 @@ async function cmdList(argv: Argv) {
 }
 
 async function cmdAsk(argv: Argv) {
-  const keyword = argv[0];
   const question =
     flag(argv, '--question') ?? flag(argv, '-q') ?? 'In one sentence, what was this session about?';
-  const topN = numFlag(argv, '--top', 3);
   const timeoutMs = numFlag(argv, '--timeout', 120_000);
   const json = argv.includes('--json');
+  const idArg = flag(argv, '--id');
+  const runtimeHint = flag(argv, '--runtime') as Runtime | undefined;
 
-  if (!keyword || keyword.startsWith('-')) {
-    console.error(`${c.red('usage:')} memto ask <keyword> [--question "..."] [--top N] [--json]`);
+  if (!idArg) {
+    console.error(
+      `${c.red('usage:')} memto ask --id <id>[,<id>...] [--question "..."] [--runtime <rt>] [--timeout ms] [--json]\n${c.dim('  pipe from `memto list --json` to choose IDs:')}\n${c.dim('  memto list --json | jq -r \'.[] | select(.cwd|test("billing")) | .id\'')}`,
+    );
     process.exit(1);
   }
 
-  const all = await listAllSessions({ limitPerRuntime: 30 });
-  const matches = all.filter((s) => {
-    const hay = `${s.title ?? ''}\n${s.first_user_prompt ?? ''}\n${s.cwd ?? ''}`.toLowerCase();
-    return hay.includes(keyword.toLowerCase());
-  });
+  const ids = idArg.split(',').map((s) => s.trim()).filter(Boolean);
+  const sessions: NormalizedSession[] = [];
+  const missing: string[] = [];
 
-  if (matches.length === 0) {
-    if (json) {
-      process.stdout.write(JSON.stringify({ question, results: [] }) + '\n');
-      process.exit(2);
+  // Resolve each id → session. If runtime is given, scan only that adapter;
+  // else try every adapter in order.
+  const runtimes: Runtime[] = runtimeHint
+    ? [runtimeHint]
+    : ['claude-code', 'codex', 'hermes', 'openclaw'];
+  for (const id of ids) {
+    let found: NormalizedSession | null = null;
+    for (const rt of runtimes) {
+      found = await getSession(rt, id);
+      if (found) break;
     }
-    console.error(`  ${c.red('no match.')} ${c.dim(`nothing in recent sessions matched "${keyword}"`)}`);
-    process.exit(2);
+    if (found) sessions.push(found);
+    else missing.push(id);
   }
 
-  const chosen = matches.slice(0, topN);
+  if (sessions.length === 0) {
+    if (json) {
+      process.stdout.write(
+        JSON.stringify({ question, results: [], missing }, null, 2) + '\n',
+      );
+      process.exit(2);
+    }
+    console.error(`  ${c.red('no match.')} ${c.dim(`no session found for id(s): ${missing.join(', ')}`)}`);
+    process.exit(2);
+  }
 
   if (!json) {
     process.stdout.write(banner('ask'));
     console.log(`  ${section('QUESTION')}`);
     console.log(`  ${c.cream(question)}`);
     console.log();
-    console.log(`  ${section(`ASKING ${chosen.length}/${matches.length} MATCHES`)}`);
-    for (const s of chosen)
+    console.log(`  ${section(`ASKING ${sessions.length} SESSION${sessions.length === 1 ? '' : 'S'}`)}`);
+    for (const s of sessions)
       console.log(`  ${runtimeTag(s.runtime)}  ${c.cream(truncate(s.title ?? '(untitled)', 56))}`);
+    if (missing.length > 0) {
+      console.log(`  ${c.red(`(${missing.length} id(s) not found:`)} ${c.dim(missing.join(', '))}${c.red(')')}`);
+    }
     console.log();
   }
 
   const t0 = performance.now();
   const results = await Promise.all(
-    chosen.map(async (s) => {
+    sessions.map(async (s) => {
       try {
         const r = await ask(s, question, { timeoutMs });
         return { session: s, ...r, err: null as string | null };
@@ -136,7 +155,7 @@ async function cmdAsk(argv: Argv) {
 
   if (json) {
     process.stdout.write(
-      JSON.stringify({ question, elapsed_ms: Math.round(dt), results }, null, 2) + '\n',
+      JSON.stringify({ question, elapsed_ms: Math.round(dt), results, missing }, null, 2) + '\n',
     );
     return;
   }
@@ -162,7 +181,7 @@ function help() {
   console.log(`  ${section('USAGE')}`);
   console.log(`    ${c.cream('memto list')}  ${c.dim('[--limit N] [--runtime …] [--json]')}`);
   console.log(
-    `    ${c.cream('memto ask')}   ${c.dim('<keyword> [--question "…"] [--top N] [--timeout ms] [--json]')}`,
+    `    ${c.cream('memto ask')}   ${c.dim('--id <id>[,<id>…] [--question "…"] [--runtime <rt>] [--timeout ms] [--json]')}`,
   );
   console.log();
   console.log(`  ${section('TEACH YOUR AGENT')}`);

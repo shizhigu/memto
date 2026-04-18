@@ -97,43 +97,120 @@ async function run(
 }
 
 // ====================================================================
-// Claude Code: native --fork-session
+// Claude Code: cp + sanitize + --resume (no --fork-session)
 // ====================================================================
+//
+// We used to rely on `claude --fork-session`. That worked until we hit
+// sessions containing `server_tool_use` blocks with IDs that violate
+// Anthropic's current `^srvtoolu_[a-zA-Z0-9_]+$` pattern (e.g. legacy
+// cross-provider imports whose IDs start with `call_*`). Those blocks
+// replay verbatim and make the API reject the whole turn with
+// `invalid_request_error`.
+//
+// The fix: copy the original jsonl ourselves, rewrite the sessionId to
+// a new UUID, and strip content blocks whose IDs the API would reject.
+// Then resume the copy directly.
+
+const SERVER_TOOL_USE_ID_RE = /^srvtoolu_[a-zA-Z0-9_]+$/;
+const TOOL_USE_ID_RE = /^toolu_[a-zA-Z0-9_]+$/;
+
+function sanitizeClaudeLine(line: any, newSessionId: string): any | null {
+  if (!line || typeof line !== 'object') return line;
+  if (line.sessionId) line.sessionId = newSessionId;
+  const content = line?.message?.content;
+  if (!Array.isArray(content)) return line;
+  const droppedIds = new Set<string>();
+  // First pass — drop server_tool_use / tool_use blocks with bad IDs.
+  const filtered = content.filter((b: any) => {
+    if (!b || typeof b !== 'object') return true;
+    if (b.type === 'server_tool_use') {
+      if (!b.id || !SERVER_TOOL_USE_ID_RE.test(b.id)) {
+        if (b.id) droppedIds.add(b.id);
+        return false;
+      }
+    }
+    if (b.type === 'tool_use') {
+      if (!b.id || !TOOL_USE_ID_RE.test(b.id)) {
+        if (b.id) droppedIds.add(b.id);
+        return false;
+      }
+    }
+    return true;
+  });
+  // Second pass — drop any *_tool_result blocks that referenced a dropped id.
+  const final = filtered.filter((b: any) => {
+    if (!b || typeof b !== 'object') return true;
+    if (
+      (b.type === 'web_search_tool_result' || b.type === 'tool_result') &&
+      b.tool_use_id &&
+      droppedIds.has(b.tool_use_id)
+    ) {
+      return false;
+    }
+    return true;
+  });
+  line.message.content = final;
+  return line;
+}
+
+async function forkClaudeSession(
+  session: NormalizedSession,
+): Promise<{ newId: string; newPath: string; projectDir: string }> {
+  if (!session.raw_path) {
+    throw new Error('claude-code adapter did not populate raw_path on the session');
+  }
+  const projectDir = dirname(session.raw_path);
+  const newId = randomUUID();
+  const newPath = join(projectDir, `${newId}.jsonl`);
+  const raw = await readFile(session.raw_path, 'utf8');
+  const lines = raw.split('\n').filter((l) => l.length > 0);
+  const out: string[] = [];
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      const sanitized = sanitizeClaudeLine(parsed, newId);
+      if (sanitized) out.push(JSON.stringify(sanitized));
+    } catch {
+      /* malformed line — drop */
+    }
+  }
+  await writeFile(newPath, `${out.join('\n')}\n`, { mode: 0o600 });
+  return { newId, newPath, projectDir };
+}
 
 async function askClaude(
   session: NormalizedSession,
   question: string,
   opts: AskOptions,
 ): Promise<AskResult> {
-  // Snapshot the set of jsonl files in the project dir before we spawn.
-  // After --fork-session claude writes a new jsonl that we need to clean
-  // up — the CLI doesn't expose the fork id, so we diff before/after.
-  const projectDir = session.cwd
-    ? join(homedir(), '.claude', 'projects', session.cwd.replace(/\//g, '-'))
-    : null;
-  const before = projectDir ? await snapshotJsonlIds(projectDir) : new Set<string>();
+  let targetId = session.id;
+  let newPath: string | null = null;
+  let projectDir: string | null = null;
 
-  const args = ['-p', question, '--resume', session.id];
-  if (!opts.inPlace) args.push('--fork-session');
+  if (!opts.inPlace) {
+    const fork = await forkClaudeSession(session);
+    targetId = fork.newId;
+    newPath = fork.newPath;
+    projectDir = fork.projectDir;
+  }
+
   // claude --resume only finds sessions whose project matches the current
   // cwd, so we spawn the subprocess in the original working directory.
-  const r = await run('claude', args, autoTimeout(session, opts.timeoutMs), session.cwd);
+  const r = await run(
+    'claude',
+    ['-p', question, '--resume', targetId],
+    autoTimeout(session, opts.timeoutMs),
+    session.cwd,
+  );
 
-  // Clean up any jsonl file claude created (the fork). We never touch
-  // the original session id file nor anything that predates our call.
   let cleanedUp = false;
-  if (!opts.inPlace && projectDir) {
-    const after = await snapshotJsonlIds(projectDir);
-    for (const id of after) {
-      if (id === session.id) continue;
-      if (before.has(id)) continue;
-      await unlink(join(projectDir, `${id}.jsonl`)).catch(() => {
-        /* best effort */
-      });
-      // claude also creates a sibling directory <id>/ for tool results.
-      await rmrf(join(projectDir, id));
-      cleanedUp = true;
-    }
+  if (!opts.inPlace && newPath && projectDir) {
+    await unlink(newPath).catch(() => {
+      /* best effort */
+    });
+    // Claude may create a sibling directory <newId>/ for tool results.
+    await rmrf(join(projectDir, targetId));
+    cleanedUp = true;
   }
 
   return {

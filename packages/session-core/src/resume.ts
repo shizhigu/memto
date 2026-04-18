@@ -31,30 +31,6 @@ export interface AskOptions {
    * sessions (50+ MB) can genuinely take several minutes to reload.
    */
   timeoutMs?: number;
-  /**
-   * Override the model used to answer the forked question. For short Q&A
-   * against a memory-dense session, smaller models are usually plenty.
-   *
-   * Runtime support varies — model names are **not** portable across runtimes:
-   *
-   *   claude-code : ✅ reliable. `--model <name>` — `haiku` / `sonnet` /
-   *                 `opus` aliases or full model id. Anthropic owns the
-   *                 namespace, so these names work for every user.
-   *
-   *   codex       : ✅ reliable. `-m <MODEL>` — OpenAI model id
-   *                 (`gpt-5-codex`, `gpt-5-nano`, etc.).
-   *
-   *   hermes      : ⚠️ best-effort. Flag exists (`-m <MODEL>`), but the set
-   *                 of valid names depends on which providers the user has
-   *                 configured in their gateway (Anthropic direct, OpenRouter,
-   *                 Z.AI, Kimi, …). Pass whatever namespaced id their config
-   *                 accepts; expect an error if the gateway doesn't know it.
-   *
-   *   openclaw    : ❌ ignored. Model is bound per-agent at config time with
-   *                 no per-invocation flag. Change the agent's model via
-   *                 `openclaw agents` instead.
-   */
-  model?: string;
 }
 
 export interface AskResult {
@@ -218,13 +194,11 @@ async function askClaude(
     projectDir = fork.projectDir;
   }
 
-  const claudeArgs = ['-p', question, '--resume', targetId];
-  if (opts.model) claudeArgs.push('--model', opts.model);
   // claude --resume only finds sessions whose project matches the current
   // cwd, so we spawn the subprocess in the original working directory.
   const r = await run(
     'claude',
-    claudeArgs,
+    ['-p', question, '--resume', targetId],
     autoTimeout(session, opts.timeoutMs),
     session.cwd,
   );
@@ -318,10 +292,12 @@ async function askCodex(
     cleanupPath = newPath;
   }
 
-  const codexArgs = ['exec', 'resume', targetId];
-  if (opts.model) codexArgs.push('-m', opts.model);
-  codexArgs.push(question);
-  const r = await run('codex', codexArgs, autoTimeout(session, opts.timeoutMs), session.cwd);
+  const r = await run(
+    'codex',
+    ['exec', 'resume', targetId, question],
+    autoTimeout(session, opts.timeoutMs),
+    session.cwd,
+  );
 
   if (cleanupPath) {
     await unlink(cleanupPath).catch(() => {
@@ -429,9 +405,11 @@ async function askHermes(
     forkId = r.newId;
   }
 
-  const hermesArgs = ['chat', '-Q', '-q', question, '--resume', targetId];
-  if (opts.model) hermesArgs.push('-m', opts.model);
-  const r = await run('hermes', hermesArgs, autoTimeout(session, opts.timeoutMs));
+  const r = await run(
+    'hermes',
+    ['chat', '-Q', '-q', question, '--resume', targetId],
+    autoTimeout(session, opts.timeoutMs),
+  );
 
   if (forkId) await cleanupHermesFork(forkId);
 

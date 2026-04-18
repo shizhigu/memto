@@ -4,15 +4,19 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
-## [0.2.1] — 2026-04-17
+## [0.2.2] — 2026-04-17
 
-### Added
+### Removed
 
-- `memto ask --model <name>` — override the model used to answer the forked question. Typical use: fork a huge opus session but answer the question with haiku for cost/speed. Runtime support is uneven and the CLI is honest about it:
-  - **claude-code** reliable (aliases `haiku`/`sonnet`/`opus` or full id)
-  - **codex** reliable (OpenAI id, e.g. `gpt-5-nano`)
-  - **hermes** best-effort — valid names depend on the user's gateway config
-  - **openclaw** ignored — no per-invocation model flag exists
+- `--model` flag (added in 0.2.1, never released as motivating feature). The motivation was "use a cheaper model to answer the forked question." In practice:
+  - memto's value is waking up **large** old sessions — but cheap models (haiku, gpt-5-nano) have small context windows, so they can't load the exact sessions this feature was meant to optimize.
+  - Prompt caching already makes repeat queries to the same session near-free within the 5-minute TTL (≈ 10× discount on input tokens). Cache hit dominates model choice economically.
+  - Covering all four runtimes cleanly is impossible: hermes model names depend on the user's gateway config, openclaw has no per-invocation flag. An honest CLI would degrade silently for half the runtimes.
+  - Keeping the flag implied a savings pathway that almost never applies. Removing it keeps the surface small and honest.
+
+## [0.2.1] — 2026-04-17 (superseded)
+
+Added and then removed `--model`. See 0.2.2.
 
 ## [0.2.0] — 2026-04-17
 

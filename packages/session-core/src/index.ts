@@ -125,3 +125,84 @@ export async function getMessages(
   if (!(await a.isAvailable())) return [];
   return a.messages(id);
 }
+
+export interface GrepHit {
+  session: NormalizedSession;
+  message: NormalizedMessage;
+  /** 0-based index of this message within its session's transcript. */
+  index: number;
+}
+
+export interface GrepOptions {
+  /** JS RegExp source string. */
+  pattern: string;
+  /** RegExp flags. Default `'i'` (case-insensitive). */
+  flags?: string;
+  /** Only match messages with this role. */
+  role?: NormalizedMessage['role'];
+  /** Limit search to specific runtimes. Default: all available. */
+  runtimes?: Runtime[];
+  /** Per-runtime session cap (passed to listAllSessions). Default 200. */
+  limitPerRuntime?: number;
+  /** Only search sessions active after this date. */
+  since?: Date;
+  /** Parallel session-read concurrency. Default 16. */
+  concurrency?: number;
+  /** Stop after this many total hits. Default unlimited. */
+  maxHits?: number;
+}
+
+/**
+ * Stream-grep every available session's transcript for `pattern`. Runs
+ * `getMessages()` in parallel batches, filters by regex, returns structured
+ * hits. Fast enough for interactive use: ~100-200 sessions → a few seconds.
+ *
+ * This is the primitive the `messages` per-session reader is missing. For
+ * "find the thing across everything", reach for this instead of iterating
+ * `messages` calls one session at a time.
+ */
+export async function grepAllSessions(options: GrepOptions): Promise<GrepHit[]> {
+  const re = new RegExp(options.pattern, options.flags ?? 'i');
+  const sessions = await listAllSessions({
+    runtimes: options.runtimes,
+    limitPerRuntime: options.limitPerRuntime ?? 200,
+    since: options.since,
+  });
+
+  const concurrency = Math.max(1, options.concurrency ?? 16);
+  const maxHits = options.maxHits ?? Number.POSITIVE_INFINITY;
+  const hits: GrepHit[] = [];
+  let stopped = false;
+
+  for (let i = 0; i < sessions.length && !stopped; i += concurrency) {
+    const batch = sessions.slice(i, i + concurrency);
+    const batchResults = await Promise.all(
+      batch.map(async (s) => {
+        try {
+          const msgs = await getMessages(s.runtime, s.id);
+          const local: GrepHit[] = [];
+          for (let j = 0; j < msgs.length; j++) {
+            const m = msgs[j];
+            if (options.role && m.role !== options.role) continue;
+            if (re.test(m.text)) local.push({ session: s, message: m, index: j });
+          }
+          return local;
+        } catch {
+          return [] as GrepHit[];
+        }
+      }),
+    );
+    for (const r of batchResults) {
+      for (const hit of r) {
+        hits.push(hit);
+        if (hits.length >= maxHits) {
+          stopped = true;
+          break;
+        }
+      }
+      if (stopped) break;
+    }
+  }
+
+  return hits;
+}

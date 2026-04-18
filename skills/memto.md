@@ -25,38 +25,47 @@ Do NOT use for:
 - Things visible in the current cwd (just read the files).
 - General knowledge questions unrelated to past sessions.
 
-## Three commands, one decision tree
+## Four commands, one decision tree
 
 ```
-Need raw content (file path, error message, verbatim quote, tool call)?
-  → memto messages --id <id> --grep <pat>   (cheap, <1s)
+Don't know which session the answer lives in?
+  → memto grep "<regex>" --json         (parallel scan every runtime, seconds)
 
-Need the original agent's reasoning / synthesis?
-  → memto ask --id <id> --question "…"      (expensive: 30–120s, real tokens)
+Already know the session, want specific content?
+  → memto messages --id <id> --grep <pat> --json
 
-Don't know which session to query yet?
-  → memto list --json --limit 30  | jq to filter
+Already know the session, need the original agent's synthesis?
+  → memto ask --id <id> --question "…"  (forks + revives the agent)
+
+Just browsing what's there?
+  → memto list --json --limit 30
 ```
 
-### 1. Find candidate sessions
+Default to `grep` first. It's almost always the right first step for any
+"find the thing" question, because you usually don't know up front which
+session holds the answer.
+
+### 1. Locate the answer directly with `grep`
 
 ```bash
-memto list --json --limit 30
+memto grep "retry.*policy|retry ladder" -i --role user --json
+memto grep "nextjs|迁移" -i --max-hits 5 --json
+memto grep "stripe.*webhook" --runtime claude-code --since 2026-03-01 --json
 ```
 
-Returns an array of `NormalizedSession` objects. Filter with `jq`:
+Returns hits grouped by session, each with role + timestamp + matching snippet.
+Scans ~170 sessions in 2–20s depending on pattern. **This is the right first
+command for any "find the thing" question**.
+
+### 2. If you need broader context, list with filters
 
 ```bash
 memto list --json --limit 30 | jq '.[] | select(.cwd | test("billing"))'
-memto list --json --limit 30 | jq '.[] | select(.first_user_prompt | test("retry"; "i"))'
 ```
 
-Good signals for relevance:
-- `title` or `first_user_prompt` matches the user's keyword
-- `cwd` matches the project they're asking about
-- `last_active_at` is recent (higher = more relevant)
+Signals for relevance: `title`, `first_user_prompt`, matching `cwd`, recent `last_active_at`.
 
-### 2. Read the transcript directly (cheap, preferred)
+### 3. Read the transcript directly
 
 ```bash
 memto messages --id <id> --last 30 --json
@@ -70,7 +79,7 @@ tool_name. Runs locally, no API calls, completes in under a second.
 Use this when the user's question is a **content lookup**: where is X,
 what error message did we see, which file was edited, what command was run.
 
-### 3. Fork + ask when you need synthesis (expensive)
+### 4. Fork + ask when you need synthesis
 
 ```bash
 memto ask --id <id>[,<id2>...] --question "what did we decide about retries?" --json
@@ -90,7 +99,8 @@ Originals are **never mutated**. `memto` forks each target non-destructively
 | Operation | Wall time | Token cost |
 |---|---|---|
 | `memto list` | 100–500ms for all runtimes | free |
-| `memto messages` | <1s | free |
+| `memto grep` | 2–20s for all sessions | free |
+| `memto messages` | <1s for one session | free |
 | `memto ask` (first time, big session) | 30–120s | input tokens × model price |
 | `memto ask` (same session within 5 min) | 5–15s | ~10% of first call (prompt cache hit) |
 

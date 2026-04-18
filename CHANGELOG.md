@@ -4,7 +4,16 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
-## [0.3.5] — 2026-04-17
+## [0.4.0] — 2026-04-18
+
+### Added
+
+- `memto grep <pattern>` — full-text regex search across every session's transcript, in parallel. The missing middle command. Flags: `-i / --ignore-case`, `--role`, `--runtime`, `--limit N`, `--max-hits N`, `--since YYYY-MM-DD`, `--json`. Returns hits grouped by session with role, timestamp, and snippet. Scans ~170 sessions across 4 runtimes in 2–20s depending on pattern (vs. the ~10 minutes it used to take to iterate `list` + `messages` by hand).
+- `grepAllSessions()` exported from `@memto/session-core` for programmatic use. Uses `getMessages()` under the hood with a parallel batch pattern (default concurrency 16).
+
+### Changed
+
+- Help text + skill file updated to recommend `grep` for cross-session lookups before `messages` or `ask`.
 
 ### Changed
 

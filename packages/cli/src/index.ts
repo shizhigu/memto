@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * memto CLI — one binary, three subcommands.
+ * memto CLI — one binary, four subcommands.
  *
  *   memto list     [--limit N] [--runtime claude-code|codex|hermes|openclaw] [--json]
+ *   memto grep     <pattern> [-i] [--role …] [--runtime …] [--since …] [--json]
  *   memto messages --id <id> [--last N] [--head N] [--grep <pat>] [--role …] [--json]
  *   memto ask      --id <id>[,<id>...] --question "..." [--runtime <rt>] [--json]
  *
- * `messages` is cheap (just reads the stored transcript) — prefer it for
- * content lookup. `ask` forks the session and re-runs the original agent —
- * prefer it when you need the agent's reasoning, not raw content.
+ * `grep` scans every session's transcript in parallel — use it to locate
+ * the right session(s). `messages` reads one session's transcript fully.
+ * `ask` forks and revives the original agent for big or synthesis queries.
  *
  * Agents integrate via the bundled skill at ./skills/memto.md — they call
  * the CLI through their existing Bash tool. Bundled via `bun build` into a
@@ -20,9 +21,10 @@ import {
   availableAdapters,
   getMessages,
   getSession,
+  grepAllSessions,
   listAllSessions,
 } from '@memto/session-core';
-import type { NormalizedMessage, NormalizedSession, Runtime } from '@memto/session-core';
+import type { GrepHit, NormalizedMessage, NormalizedSession, Runtime } from '@memto/session-core';
 import {
   banner,
   c,
@@ -90,6 +92,114 @@ async function cmdList(argv: Argv) {
     console.log(`    ${c.dim('id    ')} ${c.slate(s.id)}`);
     console.log();
   }
+}
+
+async function cmdGrep(argv: Argv) {
+  const pattern = argv[0];
+  if (!pattern || pattern.startsWith('-')) {
+    console.error(
+      `${c.red('usage:')} memto grep <pattern> [--role user|assistant] [--runtime <rt>] [--limit N] [-i|--ignore-case] [--max-hits N] [--since YYYY-MM-DD] [--json]`,
+    );
+    process.exit(1);
+  }
+  const role = flag(argv, '--role') as NormalizedMessage['role'] | undefined;
+  const runtime = flag(argv, '--runtime') as Runtime | undefined;
+  const limitPerRuntime = numFlag(argv, '--limit', 200);
+  const maxHits = numFlag(argv, '--max-hits', Number.POSITIVE_INFINITY);
+  const sinceStr = flag(argv, '--since');
+  const ignoreCase = argv.includes('-i') || argv.includes('--ignore-case');
+  const json = argv.includes('--json');
+
+  const t0 = performance.now();
+  const hits = await grepAllSessions({
+    pattern,
+    flags: ignoreCase ? 'i' : '',
+    role,
+    runtimes: runtime ? [runtime] : undefined,
+    limitPerRuntime,
+    maxHits: Number.isFinite(maxHits) ? maxHits : undefined,
+    since: sinceStr ? new Date(sinceStr) : undefined,
+  });
+  const dt = performance.now() - t0;
+
+  const bySession = new Map<string, GrepHit[]>();
+  for (const h of hits) {
+    const key = `${h.session.runtime}:${h.session.id}`;
+    if (!bySession.has(key)) bySession.set(key, []);
+    bySession.get(key)!.push(h);
+  }
+
+  if (json) {
+    process.stdout.write(
+      JSON.stringify(
+        {
+          pattern,
+          elapsed_ms: Math.round(dt),
+          total_hits: hits.length,
+          session_count: bySession.size,
+          sessions: Array.from(bySession.values()).map((group) => ({
+            session: {
+              runtime: group[0].session.runtime,
+              id: group[0].session.id,
+              title: group[0].session.title,
+              cwd: group[0].session.cwd,
+              last_active_at: group[0].session.last_active_at,
+            },
+            hits: group.map((h) => ({
+              index: h.index,
+              role: h.message.role,
+              timestamp: h.message.timestamp,
+              text: h.message.text,
+              tool_name: h.message.tool_name,
+            })),
+          })),
+        },
+        null,
+        2,
+      ) + '\n',
+    );
+    return;
+  }
+
+  process.stdout.write(banner('grep'));
+  console.log(`  ${section('PATTERN')}  ${c.cream(pattern)}   ${c.dim(`(${ignoreCase ? 'ignore-case' : 'case-sensitive'})`)}`);
+  console.log(
+    `  ${section('RESULTS')}  ${c.cream(String(hits.length))} ${c.dim('hits across')} ${c.cream(String(bySession.size))} ${c.dim('sessions')}   ${forest(`(${(dt / 1000).toFixed(1)}s)`)}`,
+  );
+  console.log();
+
+  if (hits.length === 0) {
+    console.log(`  ${c.dim('no matches.')}`);
+    return;
+  }
+
+  const re = new RegExp(pattern, ignoreCase ? 'i' : '');
+  for (const group of bySession.values()) {
+    const s = group[0].session;
+    const when = s.last_active_at?.slice(0, 10) ?? '';
+    console.log(
+      `  ${runtimeTag(s.runtime)}  ${c.bold(c.cream(truncate(s.title ?? '(untitled)', 56)))}   ${c.dim(when)}`,
+    );
+    console.log(`    ${c.dim('cwd   ')} ${c.cream(shortenCwd(s.cwd))}`);
+    console.log(`    ${c.dim('id    ')} ${c.slate(s.id)}`);
+    for (const h of group.slice(0, 3)) {
+      const hilite = highlightMatch(h.message.text, re);
+      console.log(
+        `    ${c.green(h.message.role)} ${c.dim(h.message.timestamp.slice(11, 19))}  ${c.cream(truncate(hilite, 200))}`,
+      );
+    }
+    if (group.length > 3) console.log(`    ${c.dim(`… and ${group.length - 3} more hits`)}`);
+    console.log();
+  }
+}
+
+function highlightMatch(text: string, re: RegExp): string {
+  const clean = text.replace(/\s+/g, ' ').trim();
+  const m = re.exec(clean);
+  if (!m) return clean;
+  const i = m.index;
+  const start = Math.max(0, i - 40);
+  return (start > 0 ? '…' : '') + clean.slice(start, i + (m[0]?.length ?? 0) + 60);
 }
 
 async function cmdMessages(argv: Argv) {
@@ -268,7 +378,10 @@ function help() {
   console.log(`  ${section('USAGE')}`);
   console.log(`    ${c.cream('memto list')}      ${c.dim('[--limit N] [--runtime …] [--json]')}`);
   console.log(
-    `    ${c.cream('memto messages')}  ${c.dim('--id <id> [--last N] [--head N] [--grep <pat>] [--role user|assistant] [--json]')}`,
+    `    ${c.cream('memto grep')}      ${c.dim('<pattern> [-i] [--role …] [--runtime …] [--since …] [--max-hits N] [--json]')}`,
+  );
+  console.log(
+    `    ${c.cream('memto messages')}  ${c.dim('--id <id> [--last N] [--head N] [--grep <pat>] [--role …] [--json]')}`,
   );
   console.log(
     `    ${c.cream('memto ask')}       ${c.dim('--id <id>[,<id>…] --question "…" [--runtime <rt>] [--timeout ms] [--json]')}`,
@@ -290,6 +403,9 @@ async function main() {
   switch (sub) {
     case 'list':
       await cmdList(rest);
+      break;
+    case 'grep':
+      await cmdGrep(rest);
       break;
     case 'messages':
       await cmdMessages(rest);

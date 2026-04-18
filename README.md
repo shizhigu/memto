@@ -88,7 +88,7 @@ Once dropped in, your agent automatically learns when to use `memto messages` vs
 
 ---
 
-## 🔍 Three commands
+## 🔍 Four commands
 
 ### `memto list` — see every past session, merged
 
@@ -118,6 +118,20 @@ Every runtime, one merged view. Pipe to `jq` for filtering:
 ```bash
 memto list --json --limit 30 | jq '.[] | select(.cwd | test("billing"))'
 ```
+
+### `memto grep` — find the session that holds the answer
+
+```bash
+memto grep "retry.*policy" -i --role user --json
+memto grep "stripe.*webhook" --runtime claude-code --since 2026-03-01 --json
+```
+
+Scans every session's transcript in parallel (default: all four runtimes,
+most-recent-first, up to 200 per runtime). Returns hits grouped by session,
+each with role + timestamp + snippet. 2–20 seconds for 170+ sessions.
+
+**This is the right first command for any "find the thing" question** —
+usually you don't know up front which session holds the answer.
 
 ### `memto messages` — read the transcript directly
 

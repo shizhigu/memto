@@ -4,7 +4,20 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
-## [0.2.2] — 2026-04-17
+## [0.3.0] — 2026-04-17
+
+### Added
+
+- `memto messages --id <id>` — read the stored transcript directly, no fork. Flags: `--last N`, `--head N`, `--grep <pattern>`, `--role user|assistant`, `--json`. Completes in under a second; use for content lookups (file paths, error messages, verbatim quotes) instead of the expensive `ask` path. This splits memto's surface into "cheap read" and "expensive synthesize", which is how agents should naturally stage their queries.
+- Skill file now documents cost/latency expectations, the messages-first decision tree, and per-runtime caveats (hermes needs bunx; openclaw fails if its provider is out of credit).
+
+### Changed
+
+- `memto ask` now requires `--question` (previously defaulted to a useless "what was this session about?"). The default encouraged lazy calls that forked a 70MB session to get a generic one-liner.
+
+### Fixed
+
+- Codex fork path now passes `--skip-git-repo-check`. Codex refuses to run in non-trusted cwds by default; for archived session replays the trust check is not meaningful.
 
 ### Removed
 

@@ -292,9 +292,12 @@ async function askCodex(
     cleanupPath = newPath;
   }
 
+  // --skip-git-repo-check: codex refuses to run in non-trusted cwds by
+  // default. Since we're re-entering an archived session non-interactively,
+  // the trust check is not meaningful — bypass it.
   const r = await run(
     'codex',
-    ['exec', 'resume', targetId, question],
+    ['exec', '--skip-git-repo-check', 'resume', targetId, question],
     autoTimeout(session, opts.timeoutMs),
     session.cwd,
   );

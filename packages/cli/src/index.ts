@@ -1,17 +1,28 @@
 #!/usr/bin/env node
 /**
- * memto CLI — one binary, two subcommands.
+ * memto CLI — one binary, three subcommands.
  *
- *   memto list [--limit N] [--runtime claude-code|codex|hermes|openclaw] [--json]
- *   memto ask  --id <id>[,<id>...] [--question "..."] [--runtime <rt>] [--json]
+ *   memto list     [--limit N] [--runtime claude-code|codex|hermes|openclaw] [--json]
+ *   memto messages --id <id> [--last N] [--head N] [--grep <pat>] [--role …] [--json]
+ *   memto ask      --id <id>[,<id>...] --question "..." [--runtime <rt>] [--json]
+ *
+ * `messages` is cheap (just reads the stored transcript) — prefer it for
+ * content lookup. `ask` forks the session and re-runs the original agent —
+ * prefer it when you need the agent's reasoning, not raw content.
  *
  * Agents integrate via the bundled skill at ./skills/memto.md — they call
  * the CLI through their existing Bash tool. Bundled via `bun build` into a
  * single dist/cli.js that runs under node ≥ 20.
  */
 
-import { ask, availableAdapters, getSession, listAllSessions } from '@memto/session-core';
-import type { NormalizedSession, Runtime } from '@memto/session-core';
+import {
+  ask,
+  availableAdapters,
+  getMessages,
+  getSession,
+  listAllSessions,
+} from '@memto/session-core';
+import type { NormalizedMessage, NormalizedSession, Runtime } from '@memto/session-core';
 import {
   banner,
   c,
@@ -81,17 +92,93 @@ async function cmdList(argv: Argv) {
   }
 }
 
+async function cmdMessages(argv: Argv) {
+  const idArg = flag(argv, '--id');
+  const runtimeHint = flag(argv, '--runtime') as Runtime | undefined;
+  const last = flag(argv, '--last');
+  const head = flag(argv, '--head');
+  const grep = flag(argv, '--grep');
+  const role = flag(argv, '--role');
+  const json = argv.includes('--json');
+
+  if (!idArg) {
+    console.error(
+      `${c.red('usage:')} memto messages --id <id> [--runtime <rt>] [--last N] [--head N] [--grep <pattern>] [--role user|assistant] [--json]`,
+    );
+    process.exit(1);
+  }
+
+  const runtimes: Runtime[] = runtimeHint
+    ? [runtimeHint]
+    : ['claude-code', 'codex', 'hermes', 'openclaw'];
+  let messages: NormalizedMessage[] = [];
+  let session: NormalizedSession | null = null;
+  for (const rt of runtimes) {
+    const s = await getSession(rt, idArg);
+    if (s) {
+      session = s;
+      messages = await getMessages(rt, idArg);
+      break;
+    }
+  }
+
+  if (!session) {
+    if (json) {
+      process.stdout.write(JSON.stringify({ id: idArg, messages: [], missing: true }) + '\n');
+      process.exit(2);
+    }
+    console.error(`  ${c.red('not found:')} ${c.dim(`no session with id ${idArg}`)}`);
+    process.exit(2);
+  }
+
+  let filtered = messages;
+  if (role) filtered = filtered.filter((m) => m.role === role);
+  if (grep) {
+    const re = new RegExp(grep, 'i');
+    filtered = filtered.filter((m) => re.test(m.text));
+  }
+  if (head) filtered = filtered.slice(0, Number.parseInt(head, 10));
+  else if (last) filtered = filtered.slice(-Number.parseInt(last, 10));
+
+  if (json) {
+    process.stdout.write(JSON.stringify({ session, messages: filtered }, null, 2) + '\n');
+    return;
+  }
+
+  process.stdout.write(banner('messages'));
+  console.log(`  ${section('SESSION')}`);
+  console.log(`  ${runtimeTag(session.runtime)}  ${c.cream(truncate(session.title ?? '(untitled)', 56))}`);
+  console.log(`  ${c.dim('cwd   ')} ${c.cream(shortenCwd(session.cwd))}`);
+  console.log(`  ${c.dim('total ')} ${c.cream(String(messages.length))} ${c.dim('messages')}   ${c.dim('showing')} ${c.cream(String(filtered.length))}`);
+  console.log();
+  console.log(`  ${section('TRANSCRIPT')}`);
+  console.log(`  ${rule(90)}`);
+  for (const m of filtered) {
+    const who =
+      m.role === 'user'
+        ? c.green(c.bold('user'))
+        : m.role === 'assistant'
+          ? c.gold(c.bold('assistant'))
+          : c.slate(m.role);
+    const when = c.dim(m.timestamp.slice(11, 19));
+    console.log(`  ${who}  ${when}${m.tool_name ? '  ' + c.slate(`→ ${m.tool_name}`) : ''}`);
+    const text = truncate(m.text || '(empty)', 300);
+    console.log(`    ${c.cream(text)}`);
+    console.log();
+  }
+}
+
 async function cmdAsk(argv: Argv) {
-  const question =
-    flag(argv, '--question') ?? flag(argv, '-q') ?? 'In one sentence, what was this session about?';
+  const question = flag(argv, '--question') ?? flag(argv, '-q');
   const timeoutMs = numFlag(argv, '--timeout', 120_000);
   const json = argv.includes('--json');
   const idArg = flag(argv, '--id');
   const runtimeHint = flag(argv, '--runtime') as Runtime | undefined;
 
-  if (!idArg) {
+  if (!idArg || !question) {
+    const reason = !idArg ? '--id is required' : '--question is required';
     console.error(
-      `${c.red('usage:')} memto ask --id <id>[,<id>...] [--question "..."] [--runtime <rt>] [--timeout ms] [--json]\n${c.dim('  pipe from `memto list --json` to choose IDs:')}\n${c.dim('  memto list --json | jq -r \'.[] | select(.cwd|test("billing")) | .id\'')}`,
+      `${c.red('usage:')} memto ask --id <id>[,<id>...] --question "..." [--runtime <rt>] [--timeout ms] [--json]\n${c.dim('  (' + reason + ')')}\n${c.dim('  tip: for cheap content lookup without forking, try `memto messages --id <id> --grep <pattern>`')}`,
     );
     process.exit(1);
   }
@@ -179,9 +266,12 @@ async function cmdAsk(argv: Argv) {
 function help() {
   process.stdout.write(banner());
   console.log(`  ${section('USAGE')}`);
-  console.log(`    ${c.cream('memto list')}  ${c.dim('[--limit N] [--runtime …] [--json]')}`);
+  console.log(`    ${c.cream('memto list')}      ${c.dim('[--limit N] [--runtime …] [--json]')}`);
   console.log(
-    `    ${c.cream('memto ask')}   ${c.dim('--id <id>[,<id>…] [--question "…"] [--runtime <rt>] [--timeout ms] [--json]')}`,
+    `    ${c.cream('memto messages')}  ${c.dim('--id <id> [--last N] [--head N] [--grep <pat>] [--role user|assistant] [--json]')}`,
+  );
+  console.log(
+    `    ${c.cream('memto ask')}       ${c.dim('--id <id>[,<id>…] --question "…" [--runtime <rt>] [--timeout ms] [--json]')}`,
   );
   console.log();
   console.log(`  ${section('TEACH YOUR AGENT')}`);
@@ -200,6 +290,9 @@ async function main() {
   switch (sub) {
     case 'list':
       await cmdList(rest);
+      break;
+    case 'messages':
+      await cmdMessages(rest);
       break;
     case 'ask':
       await cmdAsk(rest);

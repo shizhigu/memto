@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-04-17
+
+### Changed
+
+- Section title "✨ Selling points" → "✨ What memto gives you". memto isn't being sold.
+- Architecture diagram: replaced the detailed SVG (hard to scan) with a compact ASCII diagram inline in markdown. Kept the key flow (human / agent → memto → session-core → 4 native stores) and dropped the fork-strategy table details — they belong in the code, not the README.
+- Removed "cheap" / "expensive" framing from command descriptions. `memto messages` and `memto ask` are described by what they do, not by how much they cost.
+
 ## [0.3.3] — 2026-04-17
 
 ### Changed

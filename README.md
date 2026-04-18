@@ -52,13 +52,13 @@ Product decisions come from these three. None of them are negotiable.
 
 ---
 
-## ✨ Selling points
+## ✨ What memto gives you
 
 | | |
 |---|---|
 | 🔗 **Cross-runtime, no extraction** | One unified interface for Claude Code, Codex, Hermes, and OpenClaw. Every adapter reads native files directly; no conversion step, no ingestion pipeline. This is the only thing in the market that does this. |
 | 🪞 **Fork-safe by design** | Every `ask` copies the session, asks on the copy, deletes the copy. Original files untouched. You can safely query a 3-month-old session without fear of polluting it. |
-| ⚡ **Two-tier cost model** | `memto messages` reads the transcript directly (sub-second, zero tokens). `memto ask` forks + revives the original agent (slower, real tokens). Agents stage queries: cheap lookup first, synthesis second. |
+| ⚡ **Two-tier access** | `memto messages` reads the transcript directly. `memto ask` forks and revives the original agent. Pick the one that fits the question — agents learn to read first, synthesize second. |
 | 🤖 **Agent-native output** | `--json` everywhere. Ships a markdown skill so any modern agent CLI picks up the usage pattern automatically. No MCP server needed. |
 | 🧪 **No DB, no daemon, no cloud** | Contrast with Mem0 / Letta / Zep / chum-mem — all require ingestion pipelines and external stores. memto ships a single 60 KB JS file. |
 | ⏱ **Auto-scaled timeouts** | 120s floor + 1s per MB of transcript. Large sessions (60 MB+) don't silently die from premature kills. |
@@ -84,7 +84,7 @@ curl -fsSL https://raw.githubusercontent.com/shizhigu/memto/main/skills/memto.md
   > ~/.claude/skills/memto.md   # adjust path for your agent
 ```
 
-Once dropped in, your agent automatically learns when to use `memto messages` (cheap lookup) vs `memto ask` (forked synthesis).
+Once dropped in, your agent automatically learns when to use `memto messages` vs `memto ask`.
 
 ---
 
@@ -119,7 +119,7 @@ Every runtime, one merged view. Pipe to `jq` for filtering:
 memto list --json --limit 30 | jq '.[] | select(.cwd | test("billing"))'
 ```
 
-### `memto messages` — read the transcript, no fork (cheap)
+### `memto messages` — read the transcript directly
 
 ```bash
 memto messages --id <session_id> --last 10 --json
@@ -128,7 +128,7 @@ memto messages --id <session_id> --grep "retry" --role user --json
 
 Sub-second, zero tokens. Use this for content lookup — file paths, error messages, decisions stated verbatim. 80% of memory queries can be answered here without ever forking.
 
-### `memto ask` — fork + revive the original agent (expensive)
+### `memto ask` — fork and revive the original agent
 
 ```bash
 memto ask --id <session_id> --question "what did we decide about retry logic?"
@@ -146,20 +146,25 @@ Use when raw content isn't enough — when you need the original agent's synthes
 
 ## 🧩 Architecture
 
-<p align="center">
-  <img src="./assets/architecture.svg" alt="memto architecture" width="100%"/>
-</p>
+```
+you / your agent
+      │
+      │  memto list · messages · ask
+      ▼
+┌────────────────────────────────────┐
+│  memto  — one CLI, npx-able        │
+└──────────────┬─────────────────────┘
+               │  NormalizedSession / NormalizedMessage
+               ▼
+┌────────────────────────────────────┐
+│  @memto/session-core               │
+│  claude-code · codex · hermes · openclaw
+└──┬──────────┬──────────┬───────┬───┘
+   ▼          ▼          ▼       ▼
+~/.claude  ~/.codex  ~/.hermes  ~/.openclaw
+```
 
-Four native storage formats, one normalized interface. Four fork strategies, one `ask()` call:
-
-| Runtime | Storage | Native fork? | `memto` strategy |
-|---|---|---|---|
-| **Claude Code** | `~/.claude/projects/*/*.jsonl` | ✅ `--fork-session` | cp + sanitize + `--resume` (we own the copy, so we can strip legacy `server_tool_use` blocks that break replay) |
-| **Codex** | `~/.codex/sessions/**/*.jsonl` | interactive only | `cp` + patch `session_meta.payload.id` + `--skip-git-repo-check` |
-| **Hermes** | `~/.hermes/state.db` (SQLite + FTS5) | ❌ | `INSERT … SELECT` with `parent_session_id` |
-| **OpenClaw** | `~/.openclaw/agents/*/sessions/*.jsonl` | ❌ | `cp` + patch line-0 `id` |
-
-SQLite backend is auto-selected at runtime: `bun:sqlite` under bun, `better-sqlite3` under node. Either way, hermes just works.
+Four native stores, one normalized shape. Each adapter reads its runtime's files directly — no ingestion, no duplicate store. SQLite for hermes uses `bun:sqlite` under bun and `better-sqlite3` under node (picked at runtime).
 
 ---
 
@@ -174,7 +179,7 @@ const sessions = await listAllSessions({
   sampling: { strategy: 'head-and-tail', head: 2, tail: 2 },
 });
 
-// 2. cheap — read transcript
+// 2. read transcript directly
 const resumeSession = sessions.find(s => /résumé/i.test(s.title ?? ''));
 if (resumeSession) {
   const msgs = await getMessages(resumeSession.runtime, resumeSession.id);
@@ -182,7 +187,7 @@ if (resumeSession) {
   if (hit) console.log(hit.text);
 }
 
-// 3. expensive — synthesize
+// 3. synthesize — wake up the original agent
 if (resumeSession) {
   const { answer, timed_out } = await ask(resumeSession, 'where is the LaTeX file?');
   if (!timed_out) console.log(answer);

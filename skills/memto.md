@@ -106,12 +106,12 @@ Originals are **never mutated**. `memto` forks each target non-destructively
 
 ## Runtime-specific notes
 
-- **Hermes** uses `bun:sqlite`. `npx memto-cli` runs under plain node, so
-  hermes sessions are **invisible** there. If the user has hermes installed,
-  tell them to run `bunx memto-cli` (requires `bun` runtime) to see them.
-- **OpenClaw** agents bind their model at config time — the fork uses
-  whatever model the agent is configured with. If that provider is out of
+- **OpenClaw** agents bind their model at config time — the `ask` fork uses
+  whatever model the agent was configured with. If that provider is out of
   credit, `ask` fails even though `list` and `messages` still work.
+- Everything else is runtime-agnostic. All four (Claude Code, Codex, Hermes,
+  OpenClaw) normalize into the same `NormalizedSession` / `NormalizedMessage`
+  shape.
 
 ## Typical workflow
 
@@ -137,7 +137,6 @@ interesting signal.
 ```bash
 npx memto-cli list                  # one-shot, no install
 npm i -g memto-cli && memto --help  # global
-bunx memto-cli list                 # only path that sees hermes sessions
 ```
 
 Source: <https://github.com/shizhigu/memto>.

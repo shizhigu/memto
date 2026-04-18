@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file. Format loos
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-04-17
+
+### Changed
+
+- README rewritten around three axioms (the memory IS the session · never mutate the past · agent-native zero-ops), a sharper ICP statement ("super-individual running 5+ AI tabs in parallel on unrelated projects"), and a per-selling-point feature table. De-emphasized Claude Code specifically where the behavior is cross-runtime.
+- Skill file: removed the stale "hermes only visible under bunx" note (fixed in 0.3.1) and cleaned up install instructions. Skill front-matter is the standard format every modern agent CLI picks up automatically.
+
 ## [0.3.1] — 2026-04-17
 
 ### Fixed

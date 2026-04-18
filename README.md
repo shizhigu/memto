@@ -9,17 +9,19 @@
   <img alt="npm" src="https://img.shields.io/badge/install-npx%20memto--cli-c3f0b8?style=flat-square"/>
   <img alt="Node" src="https://img.shields.io/badge/node-%3E%3D20-f4ede0?style=flat-square"/>
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-5e9bff?style=flat-square"/>
-  <img alt="Tests" src="https://img.shields.io/badge/tests-64%20passing-7bd88f?style=flat-square"/>
+  <img alt="Tests" src="https://img.shields.io/badge/tests-61%20passing-7bd88f?style=flat-square"/>
   <img alt="Runtimes" src="https://img.shields.io/badge/runtimes-Claude%20Code%20%C2%B7%20Codex%20%C2%B7%20Hermes%20%C2%B7%20OpenClaw-d9893a?style=flat-square"/>
 </p>
 
 <p align="center">
-  <b>Your AI coding agents all have their own memory. You have none.</b>
+  <b>Memory for your fleet of AI coding agents.</b><br/>
+  <code>memto</code> is the unified memory layer for the multiple AI coding CLIs you use.
 </p>
 
 <p align="center">
-  <code>memto</code> turns every past session across <b>Claude Code, Codex, Hermes, and OpenClaw</b><br/>
-  into a queryable expert you can <b>wake up and ask</b>.
+  Wake up any past session across <b>Claude Code, Codex, Hermes, and OpenClaw</b><br/>
+  and ask it a question — or just read its transcript.<br/>
+  No extraction. No daemon. No cloud.
 </p>
 
 <p align="center">
@@ -28,59 +30,67 @@
 
 ---
 
-## 🎬 The problem
+## 🎬 Who this is for
 
-If you run one Claude Code tab at a time, you don't need this.
+If you run **one** AI coding tab at a time, you don't need this.
 
-If you run five — one editing your résumé, one grinding on your startup, one debugging a customer issue, one doing research, one filing your taxes — then today the answer to *"where is the LaTeX file for my résumé?"* lives in exactly **one** agent's head.
+If you run **five** — résumé in one, startup in another, debugging a customer issue in a third, deep research in a fourth, taxes in a fifth — then today the answer to *"where is the LaTeX file for my résumé?"* lives in exactly **one** agent's head.
 
 The other four have no idea. You, the human, are the only thing connecting them, and your short-term memory is the bottleneck.
 
-`memto` fixes this. Every past session becomes an **askable expert**. When you need something, you (or more often, the agent you're currently talking to) lists the fleet, picks the one who knows, forks it non-destructively, asks a question, and gets an answer grounded in the full context that original session built up.
-
-> **No RAG. No embeddings. No extracted "facts" that lose all their nuance. Memory is the original agent, woken up.**
+`memto` is built for that scenario: **multiple AI coding agents running in parallel across unrelated projects**. Not for enterprise teams locked to a single tool. Not for deep single-codebase work. For the super-individual with five tabs open.
 
 ---
 
-## ✨ Features
+## 🧭 Three axioms
+
+Product decisions come from these three. None of them are negotiable.
+
+1. **The memory IS the session.** No extraction, no embeddings, no "facts in a vector DB". The raw transcript file your agent CLI already wrote — that's the memory. We just make it queryable.
+2. **Never mutate the past.** Every `ask` forks a non-destructive copy. Your original session files are never touched. Rolling back is always a no-op because nothing changed.
+3. **Agent-native, zero ops.** One bundled CLI, `--json` on every command, a bundled skill that teaches your agents when to call it. No daemon. No database. No cloud. `npx memto-cli` and go.
+
+---
+
+## ✨ Selling points
 
 | | |
 |---|---|
-| 🎞️ **4 runtimes, one view** | Claude Code, Codex, Hermes, and OpenClaw — all normalized into the same `NormalizedSession` shape. One API reads them all. |
-| 🌱 **Non-destructive by default** | Every `ask` forks the target session. The original is never mutated. Fork artifacts are cleaned up automatically. |
-| ⚡ **Under 1 second to scan everything** | ~440 MB/s over your entire `~/.claude`, `~/.codex`, `~/.hermes`, `~/.openclaw`. |
-| 🎛 **Configurable prompt sampling** | 7 strategies (`evenly-spaced` / `first-n` / `last-n` / `head-and-tail` / `every-nth` / `all` / `none`) for `sampled_user_prompts`. |
-| 🤖 **Agent-native** | `--json` on every command. Ships a markdown skill so Claude Code / Codex / Cursor auto-discover when to call `memto ask`. No daemon, no protocol overhead — just a CLI your agents already know how to run. |
-| ⏱ **Auto-scaled timeouts** | 120s floor + 1s per MB of transcript. 60 MB Claude sessions no longer come back empty from premature kill. |
-| 🕵️ **System-prompt filtering** | `<environment_context>`, `Sender (untrusted metadata):`, Claude slash-command blobs — stripped so `first_user_prompt` is what the human actually typed. |
-| 🧪 **64 tests, 0 flakes** | Every adapter has synthetic-fixture tests. End-to-end verified against real local stores. |
+| 🔗 **Cross-runtime, no extraction** | One unified interface for Claude Code, Codex, Hermes, and OpenClaw. Every adapter reads native files directly; no conversion step, no ingestion pipeline. This is the only thing in the market that does this. |
+| 🪞 **Fork-safe by design** | Every `ask` copies the session, asks on the copy, deletes the copy. Original files untouched. You can safely query a 3-month-old session without fear of polluting it. |
+| ⚡ **Two-tier cost model** | `memto messages` reads the transcript directly (sub-second, zero tokens). `memto ask` forks + revives the original agent (slower, real tokens). Agents stage queries: cheap lookup first, synthesis second. |
+| 🤖 **Agent-native output** | `--json` everywhere. Ships a markdown skill so any modern agent CLI picks up the usage pattern automatically. No MCP server needed. |
+| 🧪 **No DB, no daemon, no cloud** | Contrast with Mem0 / Letta / Zep / chum-mem — all require ingestion pipelines and external stores. memto ships a single 60 KB JS file. |
+| ⏱ **Auto-scaled timeouts** | 120s floor + 1s per MB of transcript. Large sessions (60 MB+) don't silently die from premature kills. |
+| 🕵️ **Prompt wrapper filtering** | Runtime-specific noise (`<environment_context>`, `Sender (untrusted metadata):`, slash-command blobs, skill-injection headers) gets stripped so `first_user_prompt` is what the human actually typed. |
+| 🧪 **61 tests, 4 runtimes verified** | Every adapter has synthetic-fixture tests. All four runtimes end-to-end verified against real local stores. |
 
 ---
 
 ## 🏃 Install
 
 ```bash
-# one-shot, via npx (no install needed)
+# one-shot, no install
 npx memto-cli list
 
-# or install globally
-npm i -g memto-cli
-memto --help
+# global install
+npm i -g memto-cli && memto --help
 ```
 
-Teach your agents when to use it — drop the bundled skill into Claude Code's skills directory:
+Teach your agents to call memto automatically — drop the bundled skill into your agent's skills directory:
 
 ```bash
-mkdir -p ~/.claude/skills
 curl -fsSL https://raw.githubusercontent.com/shizhigu/memto/main/skills/memto.md \
-  > ~/.claude/skills/memto.md
+  > ~/.claude/skills/memto.md   # adjust path for your agent
 ```
 
-Claude Code auto-loads any skill file on startup — next session, it already knows about memto. The skill describes when to run `memto list --json` vs `memto ask --json` and how to parse the output.
+The skill file uses the standard `---\nname:\ndescription:\n---` front-matter format that every major agent CLI now supports. Once dropped in, your agent automatically learns when to use `memto messages` (cheap lookup) vs `memto ask` (forked synthesis).
 
 ---
 
-## 🔍 See everything your agents have been working on
+## 🔍 Three commands
+
+### `memto list` — see every past session, merged
 
 ```bash
 memto list --limit 10
@@ -95,43 +105,42 @@ memto list --limit 10
 [codex     ] 2026-04-09  fix-memory-leak-in-parser
   cwd:   ~/Projects/lsp-server
   first: investigate heap growth during long document parses
-  model: gpt-5-codex
 
 [hermes    ] 2026-04-08  onboarding-email-sequence
-  first: draft a 5-email welcome series for new B2B signups, matching our brand voice
-  model: claude-sonnet-4-6
+  first: draft a 5-email welcome series for new B2B signups
 
 [openclaw  ] 2026-04-05  deploy-staging
   first: verify the CD pipeline is green before Tuesday's release cut
 ```
 
-Pipe `--json` into `jq` when an agent is driving:
+Every runtime, one merged view. Pipe to `jq` for filtering:
 
 ```bash
 memto list --json --limit 30 | jq '.[] | select(.cwd | test("billing"))'
 ```
 
----
-
-## 💬 Ask a past session a follow-up question
+### `memto messages` — read the transcript, no fork (cheap)
 
 ```bash
-memto ask "billing" \
-  --question "what did we decide about retry logic for failed webhook deliveries?"
+memto messages --id <session_id> --last 10 --json
+memto messages --id <session_id> --grep "retry" --role user --json
+```
+
+Sub-second, zero tokens. Use this for content lookup — file paths, error messages, decisions stated verbatim. 80% of memory queries can be answered here without ever forking.
+
+### `memto ask` — fork + revive the original agent (expensive)
+
+```bash
+memto ask --id <session_id> --question "what did we decide about retry logic?"
 ```
 
 ```text
-found 2 matching session(s). asking in parallel.
-
 ━━━ [claude-code] refactor-billing-service ━━━
-  We settled on exponential backoff keyed by (customer_id, event_type), capped
-  at 24h, with idempotency keys persisted to Redis for 7 days.
-
-━━━ [codex] billing-ops-runbook ━━━
-  The retry ladder is 30s / 2m / 10m / 1h / 6h / 24h then DLQ. See handlers.ts.
+  We settled on exponential backoff keyed by (customer_id, event_type), 
+  capped at 24h, with idempotency keys persisted to Redis for 7 days.
 ```
 
-Two different sessions, two different facets of the same decision, both surfaced in parallel. Neither fact was in the agent that ran the query — it was pulled live from the agents that originally made the decisions.
+Use when raw content isn't enough — when you need the original agent's synthesis, not just its transcript. Fork is non-destructive; originals are never touched.
 
 ---
 
@@ -145,17 +154,19 @@ Four native storage formats, one normalized interface. Four fork strategies, one
 
 | Runtime | Storage | Native fork? | `memto` strategy |
 |---|---|---|---|
-| **Claude Code** | `~/.claude/projects/*/*.jsonl` | ✅ `--fork-session` | native + automatic artifact cleanup |
-| **Codex** | `~/.codex/sessions/**/*.jsonl` | interactive only | `cp` + patch `session_meta.payload.id` |
+| **Claude Code** | `~/.claude/projects/*/*.jsonl` | ✅ `--fork-session` | cp + sanitize + `--resume` (we own the copy, so we can strip legacy `server_tool_use` blocks that break replay) |
+| **Codex** | `~/.codex/sessions/**/*.jsonl` | interactive only | `cp` + patch `session_meta.payload.id` + `--skip-git-repo-check` |
 | **Hermes** | `~/.hermes/state.db` (SQLite + FTS5) | ❌ | `INSERT … SELECT` with `parent_session_id` |
 | **OpenClaw** | `~/.openclaw/agents/*/sessions/*.jsonl` | ❌ | `cp` + patch line-0 `id` |
+
+SQLite backend is auto-selected at runtime: `bun:sqlite` under bun, `better-sqlite3` under node. Either way, hermes just works.
 
 ---
 
 ## 📚 Use it as a library
 
 ```ts
-import { listAllSessions, ask } from '@memto/session-core';
+import { listAllSessions, getMessages, ask } from '@memto/session-core';
 
 // 1. enumerate
 const sessions = await listAllSessions({
@@ -163,14 +174,17 @@ const sessions = await listAllSessions({
   sampling: { strategy: 'head-and-tail', head: 2, tail: 2 },
 });
 
-// 2. pick
-const resume = sessions.find((s) =>
-  s.sampled_user_prompts?.some((p) => p.includes('résumé')),
-);
+// 2. cheap — read transcript
+const resumeSession = sessions.find(s => /résumé/i.test(s.title ?? ''));
+if (resumeSession) {
+  const msgs = await getMessages(resumeSession.runtime, resumeSession.id);
+  const hit = msgs.find(m => /\.tex/.test(m.text));
+  if (hit) console.log(hit.text);
+}
 
-// 3. ask
-if (resume) {
-  const { answer, timed_out } = await ask(resume, 'where is the LaTeX file?');
+// 3. expensive — synthesize
+if (resumeSession) {
+  const { answer, timed_out } = await ask(resumeSession, 'where is the LaTeX file?');
   if (!timed_out) console.log(answer);
 }
 ```
@@ -183,23 +197,27 @@ Think of memory not as a database but as a **fleet of dormant coworkers**.
 
 Each past session is one coworker. They kept detailed notes while they were working — the full transcript, every file they touched, every decision they made. They went home at the end of the day.
 
-When you want to know something, you don't try to rebuild their knowledge from scratch by reading their notes. You tap one on the shoulder, say *"hey, quick question,"* and they answer from the full context already in their head. Then they go back to sleep.
+When you want to know something, you don't try to rebuild their knowledge from scratch by reading their notes. Either:
 
-That's `memto ask`. The *"tap on the shoulder"* is called **fork-resume** — we clone their session state just enough to run the question, get the answer, and discard the clone. The original session file is never modified.
+- **You read their notes directly** — that's `memto messages`. Fast, free, but you have to scan.
+- **You tap one on the shoulder** — that's `memto ask`. *"Hey, quick question."* They wake up, answer from the full context already in their head, then go back to sleep.
+
+The *"tap on the shoulder"* is called **fork-resume** — we clone their session state just enough to run the question, get the answer, and discard the clone. The original session file is never modified.
 
 ---
 
-## 🎯 Why not just use Mem0 / Letta / Zep?
+## 🎯 Why not Mem0 / Letta / Zep / chum-mem?
 
-| | **memto** | Mem0 | Letta (MemGPT) | Zep |
+| | **memto** | Mem0 / Zep | Letta | chum-mem |
 |---|---|---|---|---|
-| Unit of memory | **whole past session, queryable live** | extracted facts in a vector DB | hierarchical summary tiers in one agent | facts + knowledge graph |
-| Cross-runtime | ✅ Claude + Codex + Hermes + OpenClaw | ❌ app-specific | ❌ per-agent | ❌ app-specific |
-| Fork / non-destructive read | ✅ all four runtimes | n/a | ✅ internal only | n/a |
-| External dependencies | **0** — just node | ChromaDB etc. | Postgres / SQLite | Postgres / Elastic |
-| First-time cost | none — indexes whatever your CLIs already wrote | re-ETL every conversation | re-architect your agent | re-ETL every conversation |
+| Unit of memory | **whole past session, queryable live** | extracted facts in a vector DB | hierarchical summary tiers in one agent | atomic typed claims in a knowledge graph |
+| Cross-runtime | ✅ 4 runtimes, 1 interface | ❌ app-specific | ❌ per-agent | ❌ project-scoped |
+| Non-destructive read | ✅ fork-safe | n/a | ✅ internal only | n/a |
+| External dependencies | **0** — just node | ChromaDB etc. | Postgres / SQLite | Docker + Postgres + ChromaDB + Rust |
+| First-time cost | none — indexes what your CLIs already wrote | re-ETL every conversation | re-architect your agent | spin up a stack, wait for ingestion |
+| Best for | **the super-individual running 5+ AI tabs** | single-app long-term memory | single-agent role-played memory | one large monorepo, deep code+decision graph |
 
-The fundamental difference: every memory layer on the right takes your agent conversations, **extracts** "facts" from them, and stores those facts elsewhere. `memto` doesn't extract anything. The agent session IS the memory.
+The fundamental divide: everything on the right takes your agent conversations, **extracts** structured claims from them, and stores those claims elsewhere. `memto` doesn't extract. The raw session IS the memory — you just wake it up and ask.
 
 ---
 
@@ -209,34 +227,31 @@ The fundamental difference: every memory layer on the right takes your agent con
 memto/
 ├── packages/
 │   ├── cli/                ← the `memto` binary
-│   └── session-core/       ← the universal adapter + fork/ask orchestration
+│   └── session-core/       ← universal adapter + fork/ask orchestration
 │       └── src/
 │           ├── types.ts
 │           ├── jsonl.ts      ← streaming JSONL reader
+│           ├── sqlite.ts     ← bun:sqlite / better-sqlite3 shim
 │           ├── derive.ts     ← title / prompt / sampling helpers
 │           ├── resume.ts     ← ask() orchestrator per runtime
 │           └── adapters/
 │               ├── claude-code.ts
 │               ├── codex.ts
-│               ├── hermes.ts    (SQLite)
+│               ├── hermes.ts
 │               └── openclaw.ts
 ├── skills/
-│   └── memto.md          ← drop into ~/.claude/skills/ to teach Claude Code
+│   └── memto.md          ← standard-format skill; drop into your agent's skills/
 ├── examples/
-│   ├── list-all.ts
-│   └── ask-agents.ts
 └── assets/
-    ├── banner.svg
-    └── architecture.svg
 ```
 
 ---
 
 ## 🛣 Roadmap
 
-- **v0.2** — Cursor / Windsurf / Zed adapters · live file-watch indexing · richer summary hooks
-- **v0.3** — cross-device encrypted sync · per-session privacy tags
-- **v0.4** — team-shared memory (opt-in sharing of specific sessions between people) · simple web dashboard
+- **v0.4** — Cursor / Windsurf / Zed adapters · live file-watch indexing · richer summary hooks
+- **v0.5** — cross-device encrypted sync · per-session privacy tags
+- **v0.6** — team-shared memory (opt-in sharing of specific sessions between people) · simple web dashboard
 
 File an issue if one of these matters to you, or open a PR.
 
@@ -244,7 +259,7 @@ File an issue if one of these matters to you, or open a PR.
 
 ## 🤝 Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). The TL;DR: each adapter is ~200 lines, tests use synthetic fixtures, PRs welcome.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). TL;DR: each adapter is ~200 lines, tests use synthetic fixtures, PRs welcome.
 
 ---
 
@@ -254,6 +269,6 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md). The TL;DR: each adapter is ~200 lines,
 
 <p align="center">
   <br/>
-  <sub>Built for the super-individual running ten Claude Codes at once.</sub><br/>
+  <sub>Built for the super-individual running five AI tabs at once.</sub><br/>
   <sub>🎞️ every session becomes a polaroid you can ask questions of.</sub>
 </p>
